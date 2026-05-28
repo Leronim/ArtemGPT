@@ -42,6 +42,10 @@ export function canUseAsReply(text: string): boolean {
   return true;
 }
 
+export function containsPrivateData(text: string): boolean {
+  return hasPrivateData.test(text);
+}
+
 export function canUseAsPairTrigger(text: string): boolean {
   const clean = cleanLearnedText(text);
   if (!clean || clean.length > 600 || hasPrivateData.test(clean)) return false;

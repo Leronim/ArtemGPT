@@ -1,11 +1,49 @@
 import { v4 as uuidv4 } from "uuid";
 import { config } from "../config.js";
 import { db, nowIso } from "../db/index.js";
-import { canUseAsPairTrigger, canUseAsReply, classifyReply, cleanLearnedText, cleanText, looksLikeGibberish, normalizedHash, normalizeText } from "./text.js";
+import { canUseAsPairTrigger, canUseAsReply, classifyReply, cleanLearnedText, cleanText, containsPrivateData, looksLikeGibberish, normalizedHash, normalizeText } from "./text.js";
 
 export type ReplySource = "import" | "target_chat" | "bot_good" | "manual";
 
 let lastContextPruneAt = 0;
+
+const topicPatterns: Array<[string, RegExp]> = [
+  ["деньги", /(деньг|курс|евро|доллар|битк|крипт|акци|инвест)/i],
+  ["техника", /(код|сервер|бот|деплой|api|ошибк|баг|github|впс|vps|ollama)/i],
+  ["машины", /(машин|тачк|мотор|двиг|бмв|мерс|авто)/i],
+  ["аниме", /(аниме|манг|серия|тян)/i],
+  ["игры", /(игр|стим|steam|катк|матч)/i],
+  ["работа", /(работ|созвон|таск|проект|дедлайн)/i],
+];
+
+function parseJsonArray(value: string | null | undefined): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function uniqueLimit(items: string[], limit: number): string[] {
+  return [...new Set(items.map((item) => cleanLearnedText(item)).filter(Boolean))].slice(0, limit);
+}
+
+function extractTopics(text: string): string[] {
+  return topicPatterns.filter(([, pattern]) => pattern.test(text)).map(([topic]) => topic);
+}
+
+function extractSafeFacts(text: string): string[] {
+  const clean = cleanLearnedText(text);
+  if (containsPrivateData(clean) || clean.length > 180) return [];
+  const facts: string[] = [];
+  const nameMatch = clean.match(/\b(?:меня зовут|я|это)\s+([А-ЯЁA-Z][а-яёa-z]{2,20})\b/);
+  if (nameMatch?.[1]) facts.push(`имя: ${nameMatch[1]}`);
+  const likesMatch = clean.match(/\b(?:люблю|нравится|интересно|шарю за)\s+(.{3,60})/i);
+  if (likesMatch?.[1]) facts.push(`интерес: ${likesMatch[1]}`);
+  return facts;
+}
 
 type AddReplyInput = {
   replyText: string;
@@ -315,6 +353,71 @@ export function getRecentChatContext(chatId: string, limit = 8): string {
   const recent = rows.reverse().map((row) => `${row.role}: ${row.text}`).join("\n");
   if (!summary?.summary_text) return recent;
   return `Краткая память чата:\n${summary.summary_text}\n\nПоследние сообщения:\n${recent}`;
+}
+
+export function getRecentBotReplies(chatId: string, limit = 8): string[] {
+  const rows = db.prepare(`
+    SELECT text FROM chat_context
+    WHERE chat_id = ? AND role = 'bot'
+    ORDER BY created_at DESC LIMIT ?
+  `).all(chatId, limit) as Array<{ text: string }>;
+  return rows.map((row) => row.text);
+}
+
+export function updateUserMemory(input: {
+  chatId: string;
+  userId: string;
+  displayName?: string;
+  text: string;
+}): void {
+  const clean = cleanLearnedText(input.text);
+  if (!clean || clean.startsWith("/") || looksLikeGibberish(clean) || containsPrivateData(clean)) return;
+
+  const existing = db.prepare(`
+    SELECT topics_json, facts_json, last_messages_json FROM user_memories
+    WHERE chat_id = ? AND user_id = ?
+  `).get(input.chatId, input.userId) as { topics_json: string; facts_json: string; last_messages_json: string } | undefined;
+
+  const topics = uniqueLimit([...(existing ? parseJsonArray(existing.topics_json) : []), ...extractTopics(clean)], 12);
+  const facts = uniqueLimit([...(existing ? parseJsonArray(existing.facts_json) : []), ...extractSafeFacts(clean)], 12);
+  const lastMessages = uniqueLimit([clean, ...(existing ? parseJsonArray(existing.last_messages_json) : [])], 5);
+
+  db.prepare(`
+    INSERT INTO user_memories (chat_id, user_id, display_name, topics_json, facts_json, last_messages_json, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(chat_id, user_id) DO UPDATE SET
+      display_name = COALESCE(excluded.display_name, user_memories.display_name),
+      topics_json = excluded.topics_json,
+      facts_json = excluded.facts_json,
+      last_messages_json = excluded.last_messages_json,
+      updated_at = excluded.updated_at
+  `).run(
+    input.chatId,
+    input.userId,
+    input.displayName ?? null,
+    JSON.stringify(topics),
+    JSON.stringify(facts),
+    JSON.stringify(lastMessages),
+    nowIso(),
+  );
+}
+
+export function getUserMemory(input: { chatId: string; userId?: string }): string {
+  if (!input.userId) return "";
+  const row = db.prepare(`
+    SELECT display_name, topics_json, facts_json, last_messages_json FROM user_memories
+    WHERE chat_id = ? AND user_id = ?
+  `).get(input.chatId, input.userId) as { display_name: string | null; topics_json: string; facts_json: string; last_messages_json: string } | undefined;
+  if (!row) return "";
+
+  const parts = [
+    row.display_name ? `имя/ник: ${row.display_name}` : "",
+    parseJsonArray(row.topics_json).length > 0 ? `темы: ${parseJsonArray(row.topics_json).join(", ")}` : "",
+    parseJsonArray(row.facts_json).length > 0 ? `факты: ${parseJsonArray(row.facts_json).join("; ")}` : "",
+    parseJsonArray(row.last_messages_json).length > 0 ? `последнее: ${parseJsonArray(row.last_messages_json).slice(0, 3).join(" / ")}` : "",
+  ].filter(Boolean);
+
+  return parts.join("\n");
 }
 
 export function addChatContext(input: { chatId: string; userId?: string; messageId?: string; text: string; role: "user" | "bot" }): void {

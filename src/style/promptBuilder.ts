@@ -18,6 +18,7 @@ export function formatReplyCandidates(candidates: ReplyCandidate[]): string {
 export function buildPrompt(input: {
   userMessage: string;
   recentChatContext: string;
+  userMemory: string;
   styleExamples: string;
   replyCandidates: ReplyCandidate[];
 }): string {
@@ -31,6 +32,9 @@ ${input.userMessage}
 
 Недавний контекст чата:
 ${truncateText(input.recentChatContext || "нет", 1800)}
+
+Память о собеседнике:
+${truncateText(input.userMemory || "нет", 500)}
 
 Похожие фразы из исходного стиля:
 ${truncateText(input.styleExamples || "нет", 500)}
@@ -49,6 +53,7 @@ ${formatReplyCandidates(input.replyCandidates)}
 - использовать ответ, если он не подходит по контексту;
 - писать слишком длинно.
 - писать служебные поля вроде source, approved, trigger, score, category.
+- выдумывать факты о человеке, если их нет в памяти или контексте.
 
 Сгенерируй короткий ответ в этом стиле.
 Если один из кандидатов идеально подходит, можешь использовать его почти напрямую.`;

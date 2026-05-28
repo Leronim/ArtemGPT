@@ -15,6 +15,7 @@ import {
   rejectBotResponse,
   sanitizeLearnedMentions,
   secondsSinceLastBotReply,
+  updateUserMemory,
 } from "./style/replyBank.js";
 import { generateReply } from "./llm/generateReply.js";
 import { cleanText, looksLikeGibberish } from "./style/text.js";
@@ -219,6 +220,12 @@ bot.on(message("text"), async (ctx) => {
   logger.debug(`[text] chat=${chatId} user=${userId} msg=${messageId} text=${JSON.stringify(rawText)}`);
 
   recordMessage({ chatId, userId, messageId, text: rawText, replyToMessageId });
+  updateUserMemory({
+    chatId,
+    userId,
+    displayName: ctx.from.username ?? ctx.from.first_name,
+    text: rawText,
+  });
 
   if (config.replyLearningEnabled && isStyleSource(userId)) {
     learnFromStyleMessage({ chatId, userId, messageId, text: rawText, replyToMessageId });

@@ -100,6 +100,17 @@ CREATE TABLE IF NOT EXISTS chat_summaries (
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS user_memories (
+  chat_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  display_name TEXT,
+  topics_json TEXT NOT NULL DEFAULT '[]',
+  facts_json TEXT NOT NULL DEFAULT '[]',
+  last_messages_json TEXT NOT NULL DEFAULT '[]',
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY(chat_id, user_id)
+);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS reply_bank_fts USING fts5(
   clean_reply_text,
   content='reply_bank',
@@ -142,6 +153,7 @@ CREATE INDEX IF NOT EXISTS idx_reply_pairs_approved_fail ON reply_pairs(approved
 CREATE INDEX IF NOT EXISTS idx_bot_history_chat_msg ON bot_response_history(chat_id, bot_message_id);
 CREATE INDEX IF NOT EXISTS idx_messages_chat_msg ON messages(chat_id, message_id);
 CREATE INDEX IF NOT EXISTS idx_chat_context_chat_created ON chat_context(chat_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_user_memories_chat ON user_memories(chat_id);
 `);
 
 export function nowIso(): string {
