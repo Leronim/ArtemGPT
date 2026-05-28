@@ -73,6 +73,17 @@ CREATE TABLE IF NOT EXISTS bot_response_history (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS bot_response_reactions (
+  id TEXT PRIMARY KEY,
+  chat_id TEXT NOT NULL,
+  bot_message_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  reaction_kind TEXT NOT NULL,
+  emoji TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(chat_id, bot_message_id, user_id)
+);
+
 CREATE TABLE IF NOT EXISTS chat_context (
   id TEXT PRIMARY KEY,
   chat_id TEXT NOT NULL,

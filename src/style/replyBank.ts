@@ -235,6 +235,34 @@ export function rejectBotResponse(chatId: string, botMessageId: string): boolean
   return true;
 }
 
+export function applyBotResponseReaction(input: {
+  chatId: string;
+  botMessageId: string;
+  userId: string;
+  emoji: string;
+  kind: "positive" | "negative";
+}): "approved" | "rejected" | "duplicate" | "not_found" {
+  const exists = db.prepare(`
+    SELECT id FROM bot_response_reactions
+    WHERE chat_id = ? AND bot_message_id = ? AND user_id = ?
+  `).get(input.chatId, input.botMessageId, input.userId) as { id: string } | undefined;
+
+  if (exists) return "duplicate";
+
+  const applied = input.kind === "positive"
+    ? approveBotResponse(input.chatId, input.botMessageId)
+    : rejectBotResponse(input.chatId, input.botMessageId);
+
+  if (!applied) return "not_found";
+
+  db.prepare(`
+    INSERT INTO bot_response_reactions (id, chat_id, bot_message_id, user_id, reaction_kind, emoji, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(uuidv4(), input.chatId, input.botMessageId, input.userId, input.kind, input.emoji, nowIso());
+
+  return input.kind === "positive" ? "approved" : "rejected";
+}
+
 export function forgetReplyByText(text: string): boolean {
   const result = db.prepare("DELETE FROM reply_bank WHERE normalized_hash = ?").run(normalizedHash(text));
   return result.changes > 0;

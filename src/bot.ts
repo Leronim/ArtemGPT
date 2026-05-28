@@ -4,6 +4,7 @@ import { config, isAdmin, isStyleSource } from "./config.js";
 import {
   addChatContext,
   addReplyPair,
+  applyBotResponseReaction,
   approveBotResponse,
   forgetReplyByText,
   getReplyStats,
@@ -46,6 +47,15 @@ function shouldGenerateReply(ctx: Context, rawText: string): boolean {
   if (hasBotMention(rawText, ctx.botInfo?.username)) return true;
   if (!config.groupRandomReplyEnabled) return false;
   return Math.random() < Math.max(0, Math.min(1, config.groupRandomReplyChance));
+}
+
+const positiveReactionEmojis = new Set(["👍", "❤️", "❤", "🔥", "🥰", "👏", "😁", "😂", "🤣", "👌"]);
+const negativeReactionEmojis = new Set(["👎", "💩"]);
+
+function reactionEmoji(reaction: unknown): string | null {
+  if (!reaction || typeof reaction !== "object") return null;
+  const value = reaction as { type?: string; emoji?: string };
+  return value.type === "emoji" && typeof value.emoji === "string" ? value.emoji : null;
 }
 
 bot.start(async (ctx) => {
@@ -129,6 +139,44 @@ bot.command("forget_reply", async (ctx) => {
   await ctx.reply(forgetReplyByText(text) ? "забыл" : "не нашел");
 });
 
+bot.use(async (ctx, next) => {
+  const update = ctx.update as unknown as {
+    message_reaction?: {
+      chat: { id: number | string };
+      message_id: number;
+      user?: { id: number | string };
+      new_reaction?: unknown[];
+    };
+  };
+  const reactionUpdate = update.message_reaction;
+  if (!reactionUpdate) {
+    await next();
+    return;
+  }
+
+  const emoji = reactionEmoji(reactionUpdate?.new_reaction?.[0]);
+  const userId = reactionUpdate?.user?.id;
+
+  if (!reactionUpdate || !emoji || userId == null) return;
+
+  const kind = positiveReactionEmojis.has(emoji)
+    ? "positive"
+    : negativeReactionEmojis.has(emoji)
+      ? "negative"
+      : null;
+  if (!kind) return;
+
+  const result = applyBotResponseReaction({
+    chatId: String(reactionUpdate.chat.id),
+    botMessageId: String(reactionUpdate.message_id),
+    userId: String(userId),
+    emoji,
+    kind,
+  });
+
+  console.log(`[reaction] chat=${reactionUpdate.chat.id} msg=${reactionUpdate.message_id} user=${userId} emoji=${emoji} result=${result}`);
+});
+
 bot.on(message("text"), async (ctx) => {
   const rawText = cleanText(ctx.message.text);
   const text = stripBotMention(rawText, ctx.botInfo?.username);
@@ -171,7 +219,7 @@ bot.catch((error, ctx) => {
   console.error(`Bot error for update ${ctx.update.update_id}`, error);
 });
 
-bot.launch();
+bot.launch({ allowedUpdates: ["message", "message_reaction"] });
 console.log("ArtemGPT bot started");
 
 process.once("SIGINT", () => bot.stop("SIGINT"));
