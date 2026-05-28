@@ -4,6 +4,14 @@ Recommended target: Ubuntu 22.04/24.04 VPS.
 
 ## 1. Install runtime
 
+Fast path:
+
+```bash
+sudo bash /opt/artemgpt/deploy/setup-vps.sh
+```
+
+Manual path:
+
 ```bash
 sudo apt update
 sudo apt install -y git curl build-essential
