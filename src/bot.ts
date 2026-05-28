@@ -147,8 +147,19 @@ bot.use(async (ctx, next) => {
       user?: { id: number | string };
       new_reaction?: unknown[];
     };
+    message_reaction_count?: {
+      chat: { id: number | string };
+      message_id: number;
+      reactions?: unknown[];
+    };
   };
   const reactionUpdate = update.message_reaction;
+  const reactionCountUpdate = update.message_reaction_count;
+  if (reactionCountUpdate) {
+    console.log(`[reaction_count:update] chat=${reactionCountUpdate.chat.id} msg=${reactionCountUpdate.message_id}`);
+    return;
+  }
+
   if (!reactionUpdate) {
     await next();
     return;
@@ -221,8 +232,8 @@ bot.catch((error, ctx) => {
   console.error(`Bot error for update ${ctx.update.update_id}`, error);
 });
 
-bot.launch({ allowedUpdates: ["message", "message_reaction"] });
-console.log("ArtemGPT bot started with allowed updates: message,message_reaction");
+bot.launch({ allowedUpdates: ["message", "message_reaction", "message_reaction_count"] });
+console.log("ArtemGPT bot started with allowed updates: message,message_reaction,message_reaction_count");
 
 process.once("SIGINT", () => bot.stop("SIGINT"));
 process.once("SIGTERM", () => bot.stop("SIGTERM"));
