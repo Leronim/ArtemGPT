@@ -154,6 +154,8 @@ bot.use(async (ctx, next) => {
     return;
   }
 
+  console.log(`[reaction:update] chat=${reactionUpdate.chat.id} msg=${reactionUpdate.message_id} user=${reactionUpdate.user?.id ?? "unknown"}`);
+
   const emoji = reactionEmoji(reactionUpdate?.new_reaction?.[0]);
   const userId = reactionUpdate?.user?.id;
 
@@ -220,7 +222,7 @@ bot.catch((error, ctx) => {
 });
 
 bot.launch({ allowedUpdates: ["message", "message_reaction"] });
-console.log("ArtemGPT bot started");
+console.log("ArtemGPT bot started with allowed updates: message,message_reaction");
 
 process.once("SIGINT", () => bot.stop("SIGINT"));
 process.once("SIGTERM", () => bot.stop("SIGTERM"));
