@@ -1,0 +1,17 @@
+[Unit]
+Description=ArtemGPT Telegram bot
+After=network-online.target ollama.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/artemgpt
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=5
+User=artemgpt
+Group=artemgpt
+
+[Install]
+WantedBy=multi-user.target
