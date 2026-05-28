@@ -1,4 +1,5 @@
 import { looksLikeGibberish, normalizeText } from "./text.js";
+import { getBotDisplayName } from "./botProfile.js";
 
 const variants = {
   greeting: ["ку", "дарова", "привет"],
@@ -19,6 +20,10 @@ export function getFastCommonReply(userMessage: string): string | null {
 
   if (looksLikeGibberish(userMessage)) {
     return pick(variants.gibberish);
+  }
+
+  if (/(как тебя зовут|как звать|твое имя|твоё имя|ты кто|как тебя зовут\??)/i.test(text)) {
+    return `я ${getBotDisplayName()}`;
   }
 
   if (/^(ку|привет|здарова|дарова|хай|hello|hi)\b/i.test(text)) {

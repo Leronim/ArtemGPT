@@ -34,6 +34,12 @@ export function getBotProfile(): string {
   return readFileSync(profilePath, "utf8").trim();
 }
 
+export function getBotDisplayName(): string {
+  const profile = getBotProfile();
+  const match = profile.match(/(?:тебя зовут|зовут тебя|имя[:\s]+)\s*([А-ЯЁA-Z][а-яёa-zA-Z-]{1,30})/i);
+  return match?.[1] ?? "Темыч";
+}
+
 export function resetBotProfile(): void {
   mkdirSync(dirname(profilePath), { recursive: true });
   writeFileSync(profilePath, `${defaultProfile}\n`, "utf8");
