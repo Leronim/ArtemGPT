@@ -1,8 +1,11 @@
 import { v4 as uuidv4 } from "uuid";
+import { config } from "../config.js";
 import { db, nowIso } from "../db/index.js";
 import { canUseAsPairTrigger, canUseAsReply, classifyReply, cleanLearnedText, cleanText, looksLikeGibberish, normalizedHash, normalizeText } from "./text.js";
 
 export type ReplySource = "import" | "target_chat" | "bot_good" | "manual";
+
+let lastContextPruneAt = 0;
 
 type AddReplyInput = {
   replyText: string;
@@ -322,6 +325,16 @@ export function addChatContext(input: { chatId: string; userId?: string; message
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(uuidv4(), input.chatId, input.userId ?? null, input.messageId ?? null, text, input.role, nowIso());
   refreshChatSummary(input.chatId);
+  pruneOldChatContext();
+}
+
+export function pruneOldChatContext(): number {
+  if (config.chatContextRetentionDays <= 0) return 0;
+  const now = Date.now();
+  if (now - lastContextPruneAt < 60_000) return 0;
+  lastContextPruneAt = now;
+  const cutoff = new Date(Date.now() - config.chatContextRetentionDays * 24 * 60 * 60 * 1000).toISOString();
+  return db.prepare("DELETE FROM chat_context WHERE created_at < ?").run(cutoff).changes;
 }
 
 export function secondsSinceLastBotReply(chatId: string): number | null {
@@ -336,6 +349,8 @@ export function secondsSinceLastBotReply(chatId: string): number | null {
 
 export function cleanupReplyBank(): Record<string, number> {
   sanitizeLearnedMentions();
+  lastContextPruneAt = 0;
+  const oldContext = pruneOldChatContext();
   const badBank = db.prepare("DELETE FROM reply_bank WHERE fail_count >= 3 OR LENGTH(clean_reply_text) < 2").run().changes;
   const badPairs = db.prepare(`
     DELETE FROM reply_pairs
@@ -354,7 +369,7 @@ export function cleanupReplyBank(): Record<string, number> {
   }
 
   db.exec("INSERT INTO reply_bank_fts(reply_bank_fts) VALUES('rebuild'); INSERT INTO reply_pairs_fts(reply_pairs_fts) VALUES('rebuild');");
-  return { badBank, badPairs, gibberish };
+  return { badBank, badPairs, gibberish, oldContext };
 }
 
 export function sanitizeLearnedMentions(): void {

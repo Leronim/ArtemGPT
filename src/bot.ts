@@ -142,6 +142,7 @@ bot.command("replies_cleanup", async (ctx) => {
     `cleaned reply bank: ${result.badBank}`,
     `cleaned reply pairs: ${result.badPairs}`,
     `cleaned gibberish: ${result.gibberish}`,
+    `cleaned old context: ${result.oldContext}`,
   ].join("\n"));
 });
 

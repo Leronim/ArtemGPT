@@ -41,6 +41,7 @@ export const config = {
   groupRandomReplyEnabled: parseBoolean(process.env.GROUP_RANDOM_REPLY_ENABLED, false),
   groupRandomReplyChance: parseNumber(process.env.GROUP_RANDOM_REPLY_CHANCE, 0.05),
   groupRandomReplyCooldownSec: parseNumber(process.env.GROUP_RANDOM_REPLY_COOLDOWN_SEC, 120),
+  chatContextRetentionDays: parseNumber(process.env.CHAT_CONTEXT_RETENTION_DAYS, 7),
   logLevel: parseLogLevel(process.env.LOG_LEVEL),
 };
 
