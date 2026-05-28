@@ -30,7 +30,7 @@ export function buildPrompt(input: {
 Не пиши длинные объяснения без необходимости.
 
 Профиль бота:
-${truncateText(input.botProfile || "нет", 900)}
+${truncateText(input.botProfile || "нет", 2500)}
 
 Сообщение пользователя:
 ${input.userMessage}

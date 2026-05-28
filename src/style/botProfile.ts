@@ -49,7 +49,16 @@ export function addBotProfileFact(fact: string): boolean {
   const clean = cleanText(fact);
   if (!clean || clean.length > 300) return false;
   const current = getBotProfile();
-  writeFileSync(profilePath, `${current}\n- ${clean}\n`, "utf8");
+  const factLine = `- ${clean}`;
+  if (current.includes("Стиль:")) {
+    writeFileSync(profilePath, `${current.replace(/\nСтиль:/, `\n${factLine}\n\nСтиль:`)}\n`, "utf8");
+    return true;
+  }
+  if (current.includes("Факты о тебе:")) {
+    writeFileSync(profilePath, `${current}\n${factLine}\n`, "utf8");
+    return true;
+  }
+  writeFileSync(profilePath, `${current}\n\nФакты о тебе:\n${factLine}\n`, "utf8");
   return true;
 }
 

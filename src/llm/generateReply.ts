@@ -71,6 +71,12 @@ function chooseSafeReply(input: {
   return candidate ?? getFastCommonReply(input.userMessage) ?? getFallbackReply(input.userMessage);
 }
 
+function isBotSelfQuestion(text: string): boolean {
+  const clean = cleanText(text).toLowerCase().replace(/ё/g, "е");
+  return /(ты|тебя|тебе|тобой|твой|твое|своего|своем|себе).{0,30}(зовут|имя|кто|детств|прошл|истори|биограф|событ|профил|помнишь)/i.test(clean)
+    || /(как тебя зовут|ты кто|расскажи.*детств|что.*детств|что.*с тобой)/i.test(clean);
+}
+
 async function callOllama(prompt: string): Promise<string> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), config.ollamaTimeoutMs);
@@ -105,6 +111,8 @@ export async function generateReply(input: {
   userId?: string;
   userMessageId?: string;
 }): Promise<{ text: string; usedDirectReply: boolean }> {
+  const selfQuestion = isBotSelfQuestion(input.userMessage);
+
   if (looksLikeGibberish(input.userMessage)) {
     const text = getFallbackReply(input.userMessage);
     addChatContext({ chatId: input.chatId, userId: input.userId, messageId: input.userMessageId, text: input.userMessage, role: "user" });
@@ -124,14 +132,14 @@ export async function generateReply(input: {
     && candidate.score >= config.directReplyMinScore
     && !recentBotReplies.some((reply) => tooSimilar(candidate.replyText, reply)),
   );
-  if (config.directReplyEnabled && direct) {
+  if (!selfQuestion && config.directReplyEnabled && direct) {
     addChatContext({ chatId: input.chatId, userId: input.userId, messageId: input.userMessageId, text: input.userMessage, role: "user" });
     addChatContext({ chatId: input.chatId, text: direct.replyText, role: "bot" });
     return { text: direct.replyText, usedDirectReply: true };
   }
 
   const fastCommonReply = config.fastCommonRepliesEnabled ? getFastCommonReply(input.userMessage) : null;
-  if (fastCommonReply) {
+  if (!selfQuestion && fastCommonReply) {
     addChatContext({ chatId: input.chatId, userId: input.userId, messageId: input.userMessageId, text: input.userMessage, role: "user" });
     addChatContext({ chatId: input.chatId, text: fastCommonReply, role: "bot" });
     return { text: fastCommonReply, usedDirectReply: true };
@@ -150,7 +158,7 @@ export async function generateReply(input: {
     recentChatContext: getRecentChatContext(input.chatId, 12),
     userMemory: getUserMemory({ chatId: input.chatId, userId: input.userId }),
     styleExamples: getStyleExamples(6),
-    replyCandidates,
+    replyCandidates: selfQuestion ? [] : replyCandidates,
   });
 
   let generated = "";
@@ -162,13 +170,13 @@ export async function generateReply(input: {
     } else {
       logger.error(error);
     }
-    generated = replyCandidates[0]?.replyText ?? getFastCommonReply(input.userMessage) ?? getFallbackReply(input.userMessage);
+    generated = selfQuestion ? "" : replyCandidates[0]?.replyText ?? getFastCommonReply(input.userMessage) ?? getFallbackReply(input.userMessage);
   }
   const text = chooseSafeReply({
     generated,
     userMessage: input.userMessage,
     recentBotReplies,
-    candidates: replyCandidates,
+    candidates: selfQuestion ? [] : replyCandidates,
   }) || "не понял, давай подробнее";
   addChatContext({ chatId: input.chatId, userId: input.userId, messageId: input.userMessageId, text: input.userMessage, role: "user" });
   addChatContext({ chatId: input.chatId, text, role: "bot" });
