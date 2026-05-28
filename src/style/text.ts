@@ -21,9 +21,48 @@ export function cleanLearnedText(text: string): string {
 export function normalizeText(text: string): string {
   return cleanLearnedText(text)
     .toLowerCase()
+    .replace(/ё/g, "е")
     .replace(/[^\p{L}\p{N}\s?!]/gu, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+const synonymGroups = [
+  ["думаешь", "считаешь", "мнение", "идея", "оцени", "как тебе", "что скажешь"],
+  ["знаешь", "знаком", "слышал", "шаришь", "в курсе"],
+  ["понял", "понятно", "понимаешь", "ясно"],
+  ["привет", "ку", "дарова", "здарова", "хай"],
+  ["смешно", "ахах", "ыы", "поржал", "рофл"],
+  ["плохо", "мутно", "странно", "кринж", "сомнительно"],
+  ["хорошо", "норм", "нормально", "ок", "кайф"],
+  ["деньги", "курс", "евро", "доллар", "крипта", "биток"],
+  ["сервер", "впс", "vps", "деплой", "хостинг"],
+];
+
+const synonymMap = new Map<string, string>();
+for (const group of synonymGroups) {
+  const canonical = group[0];
+  for (const word of group) synonymMap.set(word, canonical);
+}
+
+function stemToken(token: string): string {
+  if (token.length <= 4) return token;
+  return token
+    .replace(/(ами|ями|ого|ему|ыми|ими|ах|ях|ов|ев|ом|ем|ой|ый|ий|ая|ое|ые|ую|юю|а|я|ы|и|е|у|ю|о)$/i, "")
+    .slice(0, 18);
+}
+
+export function semanticTokens(text: string): string[] {
+  const normalized = normalizeText(text);
+  const rawTokens = normalized.split(/\s+/).filter((token) => token.length > 1);
+  const tokens: string[] = [];
+  for (const token of rawTokens) {
+    tokens.push(synonymMap.get(token) ?? stemToken(token));
+  }
+  for (const [phrase, canonical] of synonymMap.entries()) {
+    if (phrase.includes(" ") && normalized.includes(phrase)) tokens.push(canonical);
+  }
+  return [...new Set(tokens)];
 }
 
 export function normalizedHash(text: string): string {
@@ -105,7 +144,7 @@ export function classifyReply(text: string): { category: string; intent: string 
 }
 
 export function tokenSet(text: string): Set<string> {
-  return new Set(normalizeText(text).split(/\s+/).filter((word) => word.length > 1));
+  return new Set(semanticTokens(text));
 }
 
 export function jaccardSimilarity(left: string, right: string): number {
@@ -117,6 +156,35 @@ export function jaccardSimilarity(left: string, right: string): number {
     if (b.has(token)) intersection += 1;
   }
   return intersection / (a.size + b.size - intersection);
+}
+
+function charNgrams(text: string): Set<string> {
+  const normalized = normalizeText(text).replace(/\s+/g, " ");
+  const grams = new Set<string>();
+  for (let i = 0; i < normalized.length - 2; i += 1) {
+    grams.add(normalized.slice(i, i + 3));
+  }
+  return grams;
+}
+
+export function charSimilarity(left: string, right: string): number {
+  const a = charNgrams(left);
+  const b = charNgrams(right);
+  if (a.size === 0 || b.size === 0) return 0;
+  let intersection = 0;
+  for (const gram of a) {
+    if (b.has(gram)) intersection += 1;
+  }
+  return intersection / Math.max(a.size, b.size);
+}
+
+export function textSimilarity(left: string, right: string): number {
+  const token = jaccardSimilarity(left, right);
+  const chars = charSimilarity(left, right);
+  const leftNorm = normalizeText(left);
+  const rightNorm = normalizeText(right);
+  const phraseBoost = leftNorm.length > 4 && rightNorm.includes(leftNorm) ? 0.25 : 0;
+  return Math.min(1, token * 0.7 + chars * 0.3 + phraseBoost);
 }
 
 export function ftsQuery(text: string): string {
