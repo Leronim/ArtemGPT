@@ -6,6 +6,7 @@ import { getStyleExamples } from "../style/styleExamples.js";
 import { getFallbackReply, getFastCommonReply } from "../style/fallbackReplies.js";
 import { cleanText, looksLikeGibberish } from "../style/text.js";
 import { logger } from "../logger.js";
+import { getBotProfile } from "../style/botProfile.js";
 
 let ollamaQueue: Promise<void> = Promise.resolve();
 
@@ -145,6 +146,7 @@ export async function generateReply(input: {
 
   const prompt = buildPrompt({
     userMessage: input.userMessage,
+    botProfile: getBotProfile(),
     recentChatContext: getRecentChatContext(input.chatId, 12),
     userMemory: getUserMemory({ chatId: input.chatId, userId: input.userId }),
     styleExamples: getStyleExamples(6),

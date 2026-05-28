@@ -20,6 +20,7 @@ import {
 import { generateReply } from "./llm/generateReply.js";
 import { cleanText, looksLikeGibberish } from "./style/text.js";
 import { logger } from "./logger.js";
+import { addBotProfileFact, getBotProfile, resetBotProfile, setBotProfileStyle } from "./style/botProfile.js";
 
 if (!config.telegramBotToken) {
   throw new Error("TELEGRAM_BOT_TOKEN is required");
@@ -145,6 +146,30 @@ bot.command("replies_cleanup", async (ctx) => {
     `cleaned gibberish: ${result.gibberish}`,
     `cleaned old context: ${result.oldContext}`,
   ].join("\n"));
+});
+
+bot.command("profile_show", async (ctx) => {
+  if (!isAdmin(ctx.from?.id)) return;
+  const profile = getBotProfile();
+  await ctx.reply(profile.length > 3500 ? `${profile.slice(0, 3500)}...` : profile);
+});
+
+bot.command("profile_add", async (ctx) => {
+  if (!isAdmin(ctx.from?.id)) return;
+  const body = cleanText(ctx.message.text.replace(/^\/profile_add(@\w+)?\s*/i, ""));
+  await ctx.reply(addBotProfileFact(body) ? "добавил" : "не добавил");
+});
+
+bot.command("profile_style", async (ctx) => {
+  if (!isAdmin(ctx.from?.id)) return;
+  const body = cleanText(ctx.message.text.replace(/^\/profile_style(@\w+)?\s*/i, ""));
+  await ctx.reply(setBotProfileStyle(body) ? "обновил стиль" : "не обновил");
+});
+
+bot.command("profile_reset", async (ctx) => {
+  if (!isAdmin(ctx.from?.id)) return;
+  resetBotProfile();
+  await ctx.reply("сбросил профиль");
 });
 
 bot.command("forget_reply", async (ctx) => {

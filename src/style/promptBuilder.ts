@@ -17,6 +17,7 @@ export function formatReplyCandidates(candidates: ReplyCandidate[]): string {
 
 export function buildPrompt(input: {
   userMessage: string;
+  botProfile: string;
   recentChatContext: string;
   userMemory: string;
   styleExamples: string;
@@ -26,6 +27,9 @@ export function buildPrompt(input: {
 Твоя задача - ответить по смыслу на последнее сообщение, коротко и естественно.
 Не игнорируй вопрос. Если спросили "как дела" - отвечай про свои дела, а не просто приветствуй.
 Не пиши длинные объяснения без необходимости.
+
+Профиль бота:
+${truncateText(input.botProfile || "нет", 900)}
 
 Сообщение пользователя:
 ${input.userMessage}
