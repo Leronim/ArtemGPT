@@ -76,7 +76,6 @@ bot.command("whoami", async (ctx) => {
 });
 
 bot.command("approve", async (ctx) => {
-  if (!isAdmin(ctx.from?.id)) return;
   const target = replyTarget(ctx);
   if (!target.messageId) {
     await ctx.reply("ответь этой командой на сообщение бота");
@@ -87,7 +86,6 @@ bot.command("approve", async (ctx) => {
 });
 
 bot.command("reject", async (ctx) => {
-  if (!isAdmin(ctx.from?.id)) return;
   const target = replyTarget(ctx);
   if (!target.messageId) {
     await ctx.reply("ответь этой командой на сообщение бота");
