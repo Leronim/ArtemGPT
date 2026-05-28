@@ -34,6 +34,8 @@ export const config = {
   directReplyMinScore: parseNumber(process.env.DIRECT_REPLY_MIN_SCORE, 0.9),
   replyLearningEnabled: parseBoolean(process.env.REPLY_LEARNING_ENABLED, true),
   replyCandidateLimit: parseNumber(process.env.REPLY_CANDIDATE_LIMIT, 12),
+  groupRandomReplyEnabled: parseBoolean(process.env.GROUP_RANDOM_REPLY_ENABLED, false),
+  groupRandomReplyChance: parseNumber(process.env.GROUP_RANDOM_REPLY_CHANCE, 0.05),
 };
 
 export function isAdmin(userId: string | number | undefined): boolean {

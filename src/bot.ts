@@ -43,7 +43,9 @@ function hasBotMention(text: string, botUsername?: string): boolean {
 
 function shouldGenerateReply(ctx: Context, rawText: string): boolean {
   if (ctx.chat?.type === "private") return true;
-  return hasBotMention(rawText, ctx.botInfo?.username);
+  if (hasBotMention(rawText, ctx.botInfo?.username)) return true;
+  if (!config.groupRandomReplyEnabled) return false;
+  return Math.random() < Math.max(0, Math.min(1, config.groupRandomReplyChance));
 }
 
 bot.start(async (ctx) => {
