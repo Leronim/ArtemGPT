@@ -30,7 +30,7 @@ export function buildPrompt(input: {
 ${input.userMessage}
 
 Недавний контекст чата:
-${truncateText(input.recentChatContext || "нет", 1500)}
+${truncateText(input.recentChatContext || "нет", 1800)}
 
 Похожие фразы из исходного стиля:
 ${truncateText(input.styleExamples || "нет", 500)}

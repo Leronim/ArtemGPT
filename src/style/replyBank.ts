@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import { db, nowIso } from "../db/index.js";
-import { canUseAsPairTrigger, canUseAsReply, classifyReply, cleanLearnedText, cleanText, normalizedHash, normalizeText } from "./text.js";
+import { canUseAsPairTrigger, canUseAsReply, classifyReply, cleanLearnedText, cleanText, looksLikeGibberish, normalizedHash, normalizeText } from "./text.js";
 
 export type ReplySource = "import" | "target_chat" | "bot_good" | "manual";
 
@@ -279,13 +279,39 @@ export function getReplyStats(): Record<string, number> {
   };
 }
 
-export function getRecentChatContext(chatId: string, limit = 12): string {
+function truncateMiddle(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, Math.floor(maxLength * 0.65)).trim()}\n...\n${text.slice(-Math.floor(maxLength * 0.3)).trim()}`;
+}
+
+function refreshChatSummary(chatId: string): void {
+  const rows = db.prepare(`
+    SELECT role, text FROM chat_context
+    WHERE chat_id = ?
+    ORDER BY created_at DESC
+    LIMIT 40
+  `).all(chatId) as Array<{ role: string; text: string }>;
+  if (rows.length < 18) return;
+
+  const older = rows.reverse().slice(0, -8);
+  const summary = truncateMiddle(older.map((row) => `${row.role}: ${row.text}`).join("\n"), 1200);
+  db.prepare(`
+    INSERT INTO chat_summaries (chat_id, summary_text, updated_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(chat_id) DO UPDATE SET summary_text = excluded.summary_text, updated_at = excluded.updated_at
+  `).run(chatId, summary, nowIso());
+}
+
+export function getRecentChatContext(chatId: string, limit = 8): string {
+  const summary = db.prepare("SELECT summary_text FROM chat_summaries WHERE chat_id = ?").get(chatId) as { summary_text: string } | undefined;
   const rows = db.prepare(`
     SELECT role, text FROM chat_context
     WHERE chat_id = ?
     ORDER BY created_at DESC LIMIT ?
   `).all(chatId, limit) as Array<{ role: string; text: string }>;
-  return rows.reverse().map((row) => `${row.role}: ${row.text}`).join("\n");
+  const recent = rows.reverse().map((row) => `${row.role}: ${row.text}`).join("\n");
+  if (!summary?.summary_text) return recent;
+  return `Краткая память чата:\n${summary.summary_text}\n\nПоследние сообщения:\n${recent}`;
 }
 
 export function addChatContext(input: { chatId: string; userId?: string; messageId?: string; text: string; role: "user" | "bot" }): void {
@@ -295,6 +321,40 @@ export function addChatContext(input: { chatId: string; userId?: string; message
     INSERT INTO chat_context (id, chat_id, user_id, message_id, text, role, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(uuidv4(), input.chatId, input.userId ?? null, input.messageId ?? null, text, input.role, nowIso());
+  refreshChatSummary(input.chatId);
+}
+
+export function secondsSinceLastBotReply(chatId: string): number | null {
+  const row = db.prepare(`
+    SELECT created_at FROM chat_context
+    WHERE chat_id = ? AND role = 'bot'
+    ORDER BY created_at DESC LIMIT 1
+  `).get(chatId) as { created_at: string } | undefined;
+  if (!row) return null;
+  return Math.max(0, Math.floor((Date.now() - Date.parse(row.created_at)) / 1000));
+}
+
+export function cleanupReplyBank(): Record<string, number> {
+  sanitizeLearnedMentions();
+  const badBank = db.prepare("DELETE FROM reply_bank WHERE fail_count >= 3 OR LENGTH(clean_reply_text) < 2").run().changes;
+  const badPairs = db.prepare(`
+    DELETE FROM reply_pairs
+    WHERE fail_count >= 3
+       OR LENGTH(clean_trigger_text) < 2
+       OR LENGTH(reply_text) < 2
+       OR reply_id NOT IN (SELECT id FROM reply_bank)
+  `).run().changes;
+
+  let gibberish = 0;
+  const rows = db.prepare("SELECT id, reply_text FROM reply_bank").all() as Array<{ id: string; reply_text: string }>;
+  for (const row of rows) {
+    if (looksLikeGibberish(row.reply_text)) {
+      gibberish += db.prepare("DELETE FROM reply_bank WHERE id = ?").run(row.id).changes;
+    }
+  }
+
+  db.exec("INSERT INTO reply_bank_fts(reply_bank_fts) VALUES('rebuild'); INSERT INTO reply_pairs_fts(reply_pairs_fts) VALUES('rebuild');");
+  return { badBank, badPairs, gibberish };
 }
 
 export function sanitizeLearnedMentions(): void {

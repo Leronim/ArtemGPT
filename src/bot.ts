@@ -6,6 +6,7 @@ import {
   addReplyPair,
   applyBotResponseReaction,
   approveBotResponse,
+  cleanupReplyBank,
   forgetReplyByText,
   getReplyStats,
   learnFromStyleMessage,
@@ -13,9 +14,11 @@ import {
   recordMessage,
   rejectBotResponse,
   sanitizeLearnedMentions,
+  secondsSinceLastBotReply,
 } from "./style/replyBank.js";
 import { generateReply } from "./llm/generateReply.js";
-import { cleanText } from "./style/text.js";
+import { cleanText, looksLikeGibberish } from "./style/text.js";
+import { logger } from "./logger.js";
 
 if (!config.telegramBotToken) {
   throw new Error("TELEGRAM_BOT_TOKEN is required");
@@ -49,6 +52,9 @@ function shouldGenerateReply(ctx: Context, rawText: string): boolean {
   if (ctx.chat?.type === "private") return true;
   if (hasBotMention(rawText, ctx.botInfo?.username)) return true;
   if (!config.groupRandomReplyEnabled) return false;
+  if (rawText.length < 4 || rawText.length > 300) return false;
+  if (/^https?:\/\/\S+$/i.test(rawText)) return false;
+  if (looksLikeGibberish(rawText)) return false;
   return Math.random() < Math.max(0, Math.min(1, config.groupRandomReplyChance));
 }
 
@@ -129,6 +135,16 @@ bot.command("replies_stats", async (ctx) => {
   ].join("\n"));
 });
 
+bot.command("replies_cleanup", async (ctx) => {
+  if (!isAdmin(ctx.from?.id)) return;
+  const result = cleanupReplyBank();
+  await ctx.reply([
+    `cleaned reply bank: ${result.badBank}`,
+    `cleaned reply pairs: ${result.badPairs}`,
+    `cleaned gibberish: ${result.gibberish}`,
+  ].join("\n"));
+});
+
 bot.command("forget_reply", async (ctx) => {
   if (!isAdmin(ctx.from?.id)) return;
   const target = replyTarget(ctx);
@@ -157,7 +173,7 @@ bot.use(async (ctx, next) => {
   const reactionUpdate = update.message_reaction;
   const reactionCountUpdate = update.message_reaction_count;
   if (reactionCountUpdate) {
-    console.log(`[reaction_count:update] chat=${reactionCountUpdate.chat.id} msg=${reactionCountUpdate.message_id}`);
+    logger.debug(`[reaction_count:update] chat=${reactionCountUpdate.chat.id} msg=${reactionCountUpdate.message_id}`);
     return;
   }
 
@@ -166,7 +182,7 @@ bot.use(async (ctx, next) => {
     return;
   }
 
-  console.log(`[reaction:update] chat=${reactionUpdate.chat.id} msg=${reactionUpdate.message_id} user=${reactionUpdate.user?.id ?? "unknown"}`);
+  logger.debug(`[reaction:update] chat=${reactionUpdate.chat.id} msg=${reactionUpdate.message_id} user=${reactionUpdate.user?.id ?? "unknown"}`);
 
   const emoji = reactionEmoji(reactionUpdate?.new_reaction?.[0]);
   const userId = reactionUpdate?.user?.id;
@@ -188,7 +204,7 @@ bot.use(async (ctx, next) => {
     kind,
   });
 
-  console.log(`[reaction] chat=${reactionUpdate.chat.id} msg=${reactionUpdate.message_id} user=${userId} emoji=${emoji} result=${result}`);
+  logger.info(`[reaction] chat=${reactionUpdate.chat.id} msg=${reactionUpdate.message_id} user=${userId} emoji=${emoji} result=${result}`);
 });
 
 bot.on(message("text"), async (ctx) => {
@@ -199,7 +215,7 @@ bot.on(message("text"), async (ctx) => {
   const messageId = String(ctx.message.message_id);
   const replyToMessageId = ctx.message.reply_to_message?.message_id == null ? undefined : String(ctx.message.reply_to_message.message_id);
 
-  console.log(`[text] chat=${chatId} user=${userId} msg=${messageId} text=${JSON.stringify(rawText)}`);
+  logger.debug(`[text] chat=${chatId} user=${userId} msg=${messageId} text=${JSON.stringify(rawText)}`);
 
   recordMessage({ chatId, userId, messageId, text: rawText, replyToMessageId });
 
@@ -210,6 +226,11 @@ bot.on(message("text"), async (ctx) => {
   if (rawText.startsWith("/")) return;
   const willReply = shouldGenerateReply(ctx, rawText);
   if (!willReply) {
+    addChatContext({ chatId, userId, messageId, text: rawText, role: "user" });
+    return;
+  }
+  const secondsSinceBot = secondsSinceLastBotReply(chatId);
+  if (ctx.chat.type !== "private" && !hasBotMention(rawText, ctx.botInfo?.username) && secondsSinceBot != null && secondsSinceBot < config.groupRandomReplyCooldownSec) {
     addChatContext({ chatId, userId, messageId, text: rawText, role: "user" });
     return;
   }
@@ -227,18 +248,18 @@ bot.on(message("text"), async (ctx) => {
       botResponseText: generated.text,
     });
   } catch (error) {
-    console.error(error);
+    logger.error(error);
     addChatContext({ chatId, userId, messageId, text, role: "user" });
     await ctx.reply("не вывез, попробуй еще раз");
   }
 });
 
 bot.catch((error, ctx) => {
-  console.error(`Bot error for update ${ctx.update.update_id}`, error);
+  logger.error(`Bot error for update ${ctx.update.update_id}`, error);
 });
 
 bot.launch({ allowedUpdates: ["message", "message_reaction", "message_reaction_count"] });
-console.log("ArtemGPT bot started with allowed updates: message,message_reaction,message_reaction_count");
+logger.info("ArtemGPT bot started with allowed updates: message,message_reaction,message_reaction_count");
 
 process.once("SIGINT", () => bot.stop("SIGINT"));
 process.once("SIGTERM", () => bot.stop("SIGTERM"));

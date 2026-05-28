@@ -94,6 +94,12 @@ CREATE TABLE IF NOT EXISTS chat_context (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS chat_summaries (
+  chat_id TEXT PRIMARY KEY,
+  summary_text TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS reply_bank_fts USING fts5(
   clean_reply_text,
   content='reply_bank',
@@ -127,6 +133,15 @@ CREATE TRIGGER IF NOT EXISTS reply_pairs_au AFTER UPDATE ON reply_pairs BEGIN
   INSERT INTO reply_pairs_fts(reply_pairs_fts, rowid, clean_trigger_text) VALUES('delete', old.rowid, old.clean_trigger_text);
   INSERT INTO reply_pairs_fts(rowid, clean_trigger_text) VALUES (new.rowid, new.clean_trigger_text);
 END;
+
+CREATE INDEX IF NOT EXISTS idx_reply_bank_source ON reply_bank(source);
+CREATE INDEX IF NOT EXISTS idx_reply_bank_approved_fail ON reply_bank(approved, fail_count);
+CREATE INDEX IF NOT EXISTS idx_reply_bank_weight ON reply_bank(weight, success_count, fail_count);
+CREATE INDEX IF NOT EXISTS idx_reply_pairs_chat ON reply_pairs(source_chat_id);
+CREATE INDEX IF NOT EXISTS idx_reply_pairs_approved_fail ON reply_pairs(approved, fail_count);
+CREATE INDEX IF NOT EXISTS idx_bot_history_chat_msg ON bot_response_history(chat_id, bot_message_id);
+CREATE INDEX IF NOT EXISTS idx_messages_chat_msg ON messages(chat_id, message_id);
+CREATE INDEX IF NOT EXISTS idx_chat_context_chat_created ON chat_context(chat_id, created_at);
 `);
 
 export function nowIso(): string {

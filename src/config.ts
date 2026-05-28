@@ -20,6 +20,10 @@ function parseNumber(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function parseLogLevel(value: string | undefined): "debug" | "info" | "warn" | "error" {
+  return value === "debug" || value === "info" || value === "warn" || value === "error" ? value : "info";
+}
+
 export const config = {
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN ?? "",
   adminUserIds: parseList(process.env.ADMIN_USER_IDS),
@@ -36,6 +40,8 @@ export const config = {
   replyCandidateLimit: parseNumber(process.env.REPLY_CANDIDATE_LIMIT, 12),
   groupRandomReplyEnabled: parseBoolean(process.env.GROUP_RANDOM_REPLY_ENABLED, false),
   groupRandomReplyChance: parseNumber(process.env.GROUP_RANDOM_REPLY_CHANCE, 0.05),
+  groupRandomReplyCooldownSec: parseNumber(process.env.GROUP_RANDOM_REPLY_COOLDOWN_SEC, 120),
+  logLevel: parseLogLevel(process.env.LOG_LEVEL),
 };
 
 export function isAdmin(userId: string | number | undefined): boolean {

@@ -5,6 +5,23 @@ import { buildPrompt } from "../style/promptBuilder.js";
 import { getStyleExamples } from "../style/styleExamples.js";
 import { getFallbackReply, getFastCommonReply } from "../style/fallbackReplies.js";
 import { cleanText, looksLikeGibberish } from "../style/text.js";
+import { logger } from "../logger.js";
+
+let ollamaQueue: Promise<void> = Promise.resolve();
+
+async function enqueueOllama<T>(task: () => Promise<T>): Promise<T> {
+  const previous = ollamaQueue;
+  let release!: () => void;
+  ollamaQueue = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await previous;
+  try {
+    return await task();
+  } finally {
+    release();
+  }
+}
 
 function cleanGeneratedReply(text: string): string {
   const withoutServiceLines = text
@@ -94,12 +111,12 @@ export async function generateReply(input: {
 
   let generated = "";
   try {
-    generated = await callOllama(prompt);
+    generated = await enqueueOllama(() => callOllama(prompt));
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      console.error(`[ollama] timed out after ${config.ollamaTimeoutMs}ms`);
+      logger.warn(`[ollama] timed out after ${config.ollamaTimeoutMs}ms`);
     } else {
-      console.error(error);
+      logger.error(error);
     }
     generated = replyCandidates[0]?.replyText ?? getFastCommonReply(input.userMessage) ?? getFallbackReply(input.userMessage);
   }
