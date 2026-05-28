@@ -87,7 +87,7 @@ export async function generateReply(input: {
 
   const prompt = buildPrompt({
     userMessage: input.userMessage,
-    recentChatContext: getRecentChatContext(input.chatId, 6),
+    recentChatContext: getRecentChatContext(input.chatId, 12),
     styleExamples: getStyleExamples(6),
     replyCandidates,
   });

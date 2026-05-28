@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import { db, nowIso } from "../db/index.js";
-import { canUseAsPairTrigger, canUseAsReply, classifyReply, cleanText, normalizedHash, normalizeText } from "./text.js";
+import { canUseAsPairTrigger, canUseAsReply, classifyReply, cleanLearnedText, cleanText, normalizedHash, normalizeText } from "./text.js";
 
 export type ReplySource = "import" | "target_chat" | "bot_good" | "manual";
 
@@ -16,7 +16,7 @@ type AddReplyInput = {
 
 export function addReply(input: AddReplyInput): string | null {
   if (!canUseAsReply(input.replyText)) return null;
-  const clean = cleanText(input.replyText);
+  const clean = cleanLearnedText(input.replyText);
   const hash = normalizedHash(clean);
   const existing = db.prepare("SELECT id FROM reply_bank WHERE normalized_hash = ?").get(hash) as { id: string } | undefined;
   const now = nowIso();
@@ -90,10 +90,10 @@ export function addReplyPair(input: {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
-    cleanText(input.triggerText),
+    cleanLearnedText(input.triggerText),
     normalizeText(input.triggerText),
     replyId,
-    cleanText(input.replyText),
+    cleanLearnedText(input.replyText),
     input.source,
     input.sourceChatId ?? null,
     input.sourceUserId ?? null,
@@ -120,7 +120,7 @@ export function recordMessage(input: {
     input.chatId,
     input.userId ?? null,
     input.messageId ?? null,
-    cleanText(input.text),
+    cleanLearnedText(input.text),
     input.replyToMessageId ?? null,
     nowIso(),
   );
@@ -178,9 +178,9 @@ export function recordBotResponse(input: {
     input.chatId,
     input.userId ?? null,
     input.userMessageId ?? null,
-    cleanText(input.userMessageText),
+    cleanLearnedText(input.userMessageText),
     input.botMessageId ?? null,
-    cleanText(input.botResponseText),
+    cleanLearnedText(input.botResponseText),
     nowIso(),
   );
   return id;
@@ -289,8 +289,59 @@ export function getRecentChatContext(chatId: string, limit = 12): string {
 }
 
 export function addChatContext(input: { chatId: string; userId?: string; messageId?: string; text: string; role: "user" | "bot" }): void {
+  const text = cleanLearnedText(input.text);
+  if (!text) return;
   db.prepare(`
     INSERT INTO chat_context (id, chat_id, user_id, message_id, text, role, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(uuidv4(), input.chatId, input.userId ?? null, input.messageId ?? null, cleanText(input.text), input.role, nowIso());
+  `).run(uuidv4(), input.chatId, input.userId ?? null, input.messageId ?? null, text, input.role, nowIso());
+}
+
+export function sanitizeLearnedMentions(): void {
+  const now = nowIso();
+  const bankRows = db.prepare("SELECT id, reply_text FROM reply_bank WHERE reply_text LIKE '%@%'").all() as Array<{ id: string; reply_text: string }>;
+  for (const row of bankRows) {
+    const cleaned = cleanLearnedText(row.reply_text);
+    if (!cleaned || cleaned === row.reply_text) continue;
+    const hash = normalizedHash(cleaned);
+    const duplicate = db.prepare("SELECT id FROM reply_bank WHERE normalized_hash = ? AND id != ?").get(hash, row.id) as { id: string } | undefined;
+    if (duplicate) {
+      db.prepare("DELETE FROM reply_bank WHERE id = ?").run(row.id);
+      continue;
+    }
+    db.prepare(`
+      UPDATE reply_bank
+      SET reply_text = ?, clean_reply_text = ?, normalized_hash = ?, updated_at = ?
+      WHERE id = ?
+    `).run(cleaned, normalizeText(cleaned), hash, now, row.id);
+  }
+
+  const pairRows = db.prepare("SELECT id, trigger_text, reply_text FROM reply_pairs WHERE trigger_text LIKE '%@%' OR reply_text LIKE '%@%'").all() as Array<{ id: string; trigger_text: string; reply_text: string }>;
+  for (const row of pairRows) {
+    const trigger = cleanLearnedText(row.trigger_text);
+    const reply = cleanLearnedText(row.reply_text);
+    if (!trigger || !reply) continue;
+    db.prepare(`
+      UPDATE reply_pairs
+      SET trigger_text = ?, clean_trigger_text = ?, reply_text = ?, updated_at = ?
+      WHERE id = ?
+    `).run(trigger, normalizeText(trigger), reply, now, row.id);
+  }
+
+  const textTables = [
+    { table: "messages", columns: ["text"] },
+    { table: "chat_context", columns: ["text"] },
+    { table: "bot_response_history", columns: ["user_message_text", "bot_response_text"] },
+  ];
+
+  for (const item of textTables) {
+    for (const column of item.columns) {
+      const rows = db.prepare(`SELECT id, ${column} AS text FROM ${item.table} WHERE ${column} LIKE '%@%'`).all() as Array<{ id: string; text: string }>;
+      for (const row of rows) {
+        const cleaned = cleanLearnedText(row.text);
+        if (!cleaned || cleaned === row.text) continue;
+        db.prepare(`UPDATE ${item.table} SET ${column} = ? WHERE id = ?`).run(cleaned, row.id);
+      }
+    }
+  }
 }

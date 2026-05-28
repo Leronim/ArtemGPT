@@ -12,6 +12,7 @@ import {
   recordBotResponse,
   recordMessage,
   rejectBotResponse,
+  sanitizeLearnedMentions,
 } from "./style/replyBank.js";
 import { generateReply } from "./llm/generateReply.js";
 import { cleanText } from "./style/text.js";
@@ -19,6 +20,8 @@ import { cleanText } from "./style/text.js";
 if (!config.telegramBotToken) {
   throw new Error("TELEGRAM_BOT_TOKEN is required");
 }
+
+sanitizeLearnedMentions();
 
 const bot = new Telegraf(config.telegramBotToken);
 
@@ -205,7 +208,11 @@ bot.on(message("text"), async (ctx) => {
   }
 
   if (rawText.startsWith("/")) return;
-  if (!shouldGenerateReply(ctx, rawText)) return;
+  const willReply = shouldGenerateReply(ctx, rawText);
+  if (!willReply) {
+    addChatContext({ chatId, userId, messageId, text: rawText, role: "user" });
+    return;
+  }
   if (!text) return;
 
   try {

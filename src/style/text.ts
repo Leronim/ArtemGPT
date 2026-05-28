@@ -10,8 +10,16 @@ export function cleanText(text: string): string {
     .trim();
 }
 
+export function stripMentions(text: string): string {
+  return cleanText(text.replace(/(^|\s)@[a-zA-Z0-9_]{3,32}\b/g, " "));
+}
+
+export function cleanLearnedText(text: string): string {
+  return stripMentions(text);
+}
+
 export function normalizeText(text: string): string {
-  return cleanText(text)
+  return cleanLearnedText(text)
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s?!]/gu, "")
     .replace(/\s+/g, " ")
@@ -23,7 +31,7 @@ export function normalizedHash(text: string): string {
 }
 
 export function canUseAsReply(text: string): boolean {
-  const clean = cleanText(text);
+  const clean = cleanLearnedText(text);
   if (!clean || clean.startsWith("/")) return false;
   if (clean.length < 2 || clean.length > 420) return false;
   if (linkOnly.test(clean)) return false;
@@ -35,7 +43,7 @@ export function canUseAsReply(text: string): boolean {
 }
 
 export function canUseAsPairTrigger(text: string): boolean {
-  const clean = cleanText(text);
+  const clean = cleanLearnedText(text);
   if (!clean || clean.length > 600 || hasPrivateData.test(clean)) return false;
   return !linkOnly.test(clean);
 }
