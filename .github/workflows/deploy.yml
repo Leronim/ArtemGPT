@@ -41,4 +41,4 @@ jobs:
       - name: Install, build, restart bot
         run: |
           ssh -i ~/.ssh/deploy_key "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
-            "cd '${{ secrets.VPS_PATH }}' && npm ci && npm run build && sudo systemctl restart artemgpt"
+            "if ! command -v npm >/dev/null 2>&1; then curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs; fi && cd '${{ secrets.VPS_PATH }}' && npm ci && npm run build && sudo systemctl restart artemgpt"
