@@ -6,7 +6,7 @@ import { getStyleExamples } from "../style/styleExamples.js";
 import { getFallbackReply, getFastCommonReply } from "../style/fallbackReplies.js";
 import { cleanText, looksLikeGibberish } from "../style/text.js";
 import { logger } from "../logger.js";
-import { getBotProfile } from "../style/botProfile.js";
+import { getBotProfile, getBotProfileFallbackAnswer } from "../style/botProfile.js";
 
 let ollamaQueue: Promise<void> = Promise.resolve();
 
@@ -62,11 +62,13 @@ function chooseSafeReply(input: {
   userMessage: string;
   recentBotReplies: string[];
   candidates: Array<{ replyText: string }>;
+  profileFallback?: string | null;
 }): string {
   const generated = cleanGeneratedReply(input.generated);
   if (!isLowQualityReply(generated, { userMessage: input.userMessage, recentBotReplies: input.recentBotReplies })) {
     return generated;
   }
+  if (input.profileFallback) return input.profileFallback;
   const candidate = input.candidates.find((item) => !input.recentBotReplies.some((reply) => tooSimilar(item.replyText, reply)))?.replyText;
   return candidate ?? getFastCommonReply(input.userMessage) ?? getFallbackReply(input.userMessage);
 }
@@ -112,6 +114,7 @@ export async function generateReply(input: {
   userMessageId?: string;
 }): Promise<{ text: string; usedDirectReply: boolean }> {
   const selfQuestion = isBotSelfQuestion(input.userMessage);
+  const profileFallback = selfQuestion ? getBotProfileFallbackAnswer(input.userMessage) : null;
 
   if (looksLikeGibberish(input.userMessage)) {
     const text = getFallbackReply(input.userMessage);
@@ -146,7 +149,7 @@ export async function generateReply(input: {
   }
 
   if (!config.llmEnabled) {
-    const text = replyCandidates[0]?.replyText ?? getFallbackReply(input.userMessage);
+    const text = profileFallback ?? replyCandidates[0]?.replyText ?? getFallbackReply(input.userMessage);
     addChatContext({ chatId: input.chatId, userId: input.userId, messageId: input.userMessageId, text: input.userMessage, role: "user" });
     addChatContext({ chatId: input.chatId, text, role: "bot" });
     return { text, usedDirectReply: true };
@@ -177,6 +180,7 @@ export async function generateReply(input: {
     userMessage: input.userMessage,
     recentBotReplies,
     candidates: selfQuestion ? [] : replyCandidates,
+    profileFallback,
   }) || "не понял, давай подробнее";
   addChatContext({ chatId: input.chatId, userId: input.userId, messageId: input.userMessageId, text: input.userMessage, role: "user" });
   addChatContext({ chatId: input.chatId, text, role: "bot" });

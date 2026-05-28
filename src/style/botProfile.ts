@@ -40,6 +40,35 @@ export function getBotDisplayName(): string {
   return match?.[1] ?? "Темыч";
 }
 
+function profileLines(): string[] {
+  return getBotProfile()
+    .split(/\r?\n/)
+    .map((line) => cleanText(line.replace(/^[-*]\s*/, "")))
+    .filter(Boolean);
+}
+
+export function getBotProfileFallbackAnswer(userMessage: string): string | null {
+  const message = cleanText(userMessage).toLowerCase().replace(/ё/g, "е");
+
+  if (/(как тебя зовут|как звать|твое имя|твоё имя|ты кто)/i.test(message)) {
+    return `я ${getBotDisplayName()}`;
+  }
+
+  if (/детств/i.test(message)) {
+    const childhood = profileLines().filter((line) => /детств|маленьк|школ|двор|песк|бесхлебн/i.test(line));
+    if (childhood.length > 0) {
+      return childhood.slice(0, 2).join(". ").replace(/\.+$/, "");
+    }
+  }
+
+  if (/(что.*с тобой|событ|прошл|биограф|помнишь)/i.test(message)) {
+    const facts = profileLines().filter((line) => !/^стиль:?$/i.test(line) && !/^факты о тебе:?$/i.test(line));
+    if (facts.length > 0) return facts.slice(0, 2).join(". ").replace(/\.+$/, "");
+  }
+
+  return null;
+}
+
 export function resetBotProfile(): void {
   mkdirSync(dirname(profilePath), { recursive: true });
   writeFileSync(profilePath, `${defaultProfile}\n`, "utf8");
