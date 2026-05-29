@@ -40,6 +40,7 @@ function tooSimilar(left: string, right: string): boolean {
   const b = cleanText(right).toLowerCase();
   if (!a || !b) return false;
   if (a === b) return true;
+  if (a.length > 12 && b.length > 12 && (a.includes(b) || b.includes(a))) return true;
   if (a.length <= 12 && b.includes(a)) return true;
   return false;
 }
@@ -69,7 +70,10 @@ function chooseSafeReply(input: {
     return generated;
   }
   if (input.profileFallback) return input.profileFallback;
-  const candidate = input.candidates.find((item) => !input.recentBotReplies.some((reply) => tooSimilar(item.replyText, reply)))?.replyText;
+  const candidate = input.candidates.find((item) =>
+    !tooSimilar(item.replyText, input.userMessage)
+    && !input.recentBotReplies.some((reply) => tooSimilar(item.replyText, reply)),
+  )?.replyText;
   return candidate ?? getFastCommonReply(input.userMessage) ?? getFallbackReply(input.userMessage);
 }
 
@@ -133,6 +137,7 @@ export async function generateReply(input: {
   const direct = replyCandidates.find((candidate) =>
     candidate.approved
     && candidate.score >= config.directReplyMinScore
+    && !tooSimilar(candidate.replyText, input.userMessage)
     && !recentBotReplies.some((reply) => tooSimilar(candidate.replyText, reply)),
   );
   if (!selfQuestion && config.directReplyEnabled && direct) {
@@ -149,7 +154,8 @@ export async function generateReply(input: {
   }
 
   if (!config.llmEnabled) {
-    const text = profileFallback ?? replyCandidates[0]?.replyText ?? getFallbackReply(input.userMessage);
+    const candidate = replyCandidates.find((item) => !tooSimilar(item.replyText, input.userMessage))?.replyText;
+    const text = profileFallback ?? candidate ?? getFallbackReply(input.userMessage);
     addChatContext({ chatId: input.chatId, userId: input.userId, messageId: input.userMessageId, text: input.userMessage, role: "user" });
     addChatContext({ chatId: input.chatId, text, role: "bot" });
     return { text, usedDirectReply: true };
@@ -173,7 +179,8 @@ export async function generateReply(input: {
     } else {
       logger.error(error);
     }
-    generated = selfQuestion ? "" : replyCandidates[0]?.replyText ?? getFastCommonReply(input.userMessage) ?? getFallbackReply(input.userMessage);
+    const candidate = replyCandidates.find((item) => !tooSimilar(item.replyText, input.userMessage))?.replyText;
+    generated = selfQuestion ? "" : candidate ?? getFastCommonReply(input.userMessage) ?? getFallbackReply(input.userMessage);
   }
   const text = chooseSafeReply({
     generated,
