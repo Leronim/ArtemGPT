@@ -92,9 +92,11 @@ async function callOllama(prompt: string): Promise<string> {
       stream: false,
       keep_alive: "10m",
       options: {
-        temperature: 0.75,
+        temperature: 0.9,
+        top_p: 0.92,
+        repeat_penalty: 1.18,
         num_ctx: 1024,
-        num_predict: 28,
+        num_predict: 40,
       },
     }),
   }).finally(() => clearTimeout(timeout));

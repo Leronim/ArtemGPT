@@ -5,9 +5,13 @@ function truncateText(text: string, maxLength: number): string {
 }
 
 export function formatReplyCandidates(candidates: ReplyCandidate[]): string {
-  if (candidates.length === 0) return "нет";
-  return candidates
-    .slice(0, 6)
+  const usefulCandidates = candidates.filter((candidate) => {
+    const text = candidate.replyText.trim().toLowerCase();
+    return text.length > 4 && !["хз", "ну хз", "ну такое", "надо подумать", "всм?", "че именно?"].includes(text);
+  });
+  if (usefulCandidates.length === 0) return "нет";
+  return usefulCandidates
+    .slice(0, 5)
     .map((candidate, index) => {
       const trigger = candidate.triggerText ? `\n   на сообщение: ${truncateText(candidate.triggerText, 120)}` : "";
       return `${index + 1}. "${truncateText(candidate.replyText, 140)}"${trigger}`;
@@ -29,6 +33,7 @@ export function buildPrompt(input: {
 Не игнорируй вопрос. Если спросили "как дела" - отвечай про свои дела, а не просто приветствуй.
 Если спрашивают о тебе, твоем имени, событиях с тобой или твоем стиле - отвечай строго по профилю бота.
 Не пиши длинные объяснения без необходимости.
+Не повторяй свои последние ответы из контекста.
 
 Профиль бота:
 ${truncateText(input.botProfile || "нет", 2500)}
@@ -51,14 +56,13 @@ ${truncateText(input.styleExamples || "нет", 500)}
 Кандидаты ответов из reply bank:
 ${formatReplyCandidates(input.replyCandidates)}
 
-Используй их как варианты того, что бот может ответить.
-Можно:
-- взять один ответ почти напрямую, если он идеально подходит;
-- слегка переформулировать;
-- смешать 2-3 короткие реакции.
+Используй их только как подсказку по тону и лексике.
+Не копируй кандидатов дословно. Ответ должен быть новым и подходить к последнему сообщению.
+Можно слегка взять настроение или 1-2 слова, но смысл ответа формируй сам.
 
 Нельзя:
 - копировать длинные личные сообщения;
+- копировать короткие заготовки вроде "хз", "ну такое", "надо подумать";
 - использовать ответ, если он не подходит по контексту;
 - писать слишком длинно.
 - писать служебные поля вроде source, approved, trigger, score, category.
@@ -66,5 +70,5 @@ ${formatReplyCandidates(input.replyCandidates)}
 - если вопрос связан с фактами, событиями или историями бота, сначала опирайся на markdown-память и профиль.
 
 Сгенерируй короткий ответ в этом стиле.
-Если один из кандидатов идеально подходит, можешь использовать его почти напрямую.`;
+Ответь одной живой фразой по смыслу последнего сообщения.`;
 }
