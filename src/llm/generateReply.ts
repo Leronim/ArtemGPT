@@ -1,5 +1,5 @@
 import { config } from "../config.js";
-import { addChatContext, getRecentBotReplies, getRecentChatContext, getUserMemory } from "../style/replyBank.js";
+import { addChatContext, getRecentBotReplies, getRecentChatContext, getUserMemory, getUserMemoryFallbackAnswer } from "../style/replyBank.js";
 import { retrieveReplyCandidates } from "../style/replyBankRetriever.js";
 import { buildPrompt } from "../style/promptBuilder.js";
 import { getStyleExamples } from "../style/styleExamples.js";
@@ -119,6 +119,13 @@ export async function generateReply(input: {
 }): Promise<{ text: string; usedDirectReply: boolean }> {
   const selfQuestion = isBotSelfQuestion(input.userMessage);
   const profileFallback = selfQuestion ? getBotProfileFallbackAnswer(input.userMessage) : null;
+  const userMemoryFallback = getUserMemoryFallbackAnswer(input);
+
+  if (userMemoryFallback) {
+    addChatContext({ chatId: input.chatId, userId: input.userId, messageId: input.userMessageId, text: input.userMessage, role: "user" });
+    addChatContext({ chatId: input.chatId, text: userMemoryFallback, role: "bot" });
+    return { text: userMemoryFallback, usedDirectReply: true };
+  }
 
   if (looksLikeGibberish(input.userMessage)) {
     const text = getFallbackReply(input.userMessage);

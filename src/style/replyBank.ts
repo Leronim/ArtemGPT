@@ -38,11 +38,21 @@ function extractSafeFacts(text: string): string[] {
   const clean = cleanLearnedText(text);
   if (containsPrivateData(clean) || clean.length > 180) return [];
   const facts: string[] = [];
-  const nameMatch = clean.match(/\b(?:меня зовут|я|это)\s+([А-ЯЁA-Z][а-яёa-z]{2,20})\b/);
+  const nameMatch = clean.match(/\b(?:меня\s+зовут|это)\s+([А-ЯЁA-Z][а-яёa-z-]{1,30})\b/i);
   if (nameMatch?.[1]) facts.push(`имя: ${nameMatch[1]}`);
   const likesMatch = clean.match(/\b(?:люблю|нравится|интересно|шарю за)\s+(.{3,60})/i);
   if (likesMatch?.[1]) facts.push(`интерес: ${likesMatch[1]}`);
   return facts;
+}
+
+function isUserIdentityQuestion(text: string): boolean {
+  const clean = cleanText(text).toLowerCase().replace(/ё/g, "е");
+  return /(как|кто).{0,20}(меня|мне).{0,20}(зовут|имя)|как.{0,20}мое.{0,10}имя|ты.{0,20}помнишь.{0,20}(меня|мое имя|как меня зовут)|кто я\b/i.test(clean);
+}
+
+function getExplicitUserName(facts: string[]): string | null {
+  const fact = facts.find((item) => /^имя:\s*\S+/i.test(item));
+  return fact?.replace(/^имя:\s*/i, "").trim() || null;
 }
 
 type AddReplyInput = {
@@ -418,6 +428,20 @@ export function getUserMemory(input: { chatId: string; userId?: string }): strin
   ].filter(Boolean);
 
   return parts.join("\n");
+}
+
+export function getUserMemoryFallbackAnswer(input: { chatId: string; userId?: string; userMessage: string }): string | null {
+  if (!input.userId || !isUserIdentityQuestion(input.userMessage)) return null;
+  const row = db.prepare(`
+    SELECT display_name, facts_json FROM user_memories
+    WHERE chat_id = ? AND user_id = ?
+  `).get(input.chatId, input.userId) as { display_name: string | null; facts_json: string } | undefined;
+  if (!row) return null;
+
+  const name = getExplicitUserName(parseJsonArray(row.facts_json));
+  if (name) return `тебя зовут ${name}`;
+
+  return null;
 }
 
 export function addChatContext(input: { chatId: string; userId?: string; messageId?: string; text: string; role: "user" | "bot" }): void {
