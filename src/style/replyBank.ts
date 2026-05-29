@@ -55,6 +55,39 @@ function getExplicitUserName(facts: string[]): string | null {
   return fact?.replace(/^имя:\s*/i, "").trim() || null;
 }
 
+function normalizePersonName(value: string): string {
+  return cleanText(value).toLowerCase().replace(/ё/g, "е").replace(/^@/, "");
+}
+
+function personAliases(name: string): string[] {
+  const normalized = normalizePersonName(name);
+  const aliases = new Set([normalized]);
+  if (normalized === "миша" || normalized === "миха" || normalized === "михаил") {
+    aliases.add("миша");
+    aliases.add("миха");
+    aliases.add("михаил");
+  }
+  return [...aliases].filter(Boolean);
+}
+
+function getPersonNameFromQuestion(text: string): string | null {
+  const clean = cleanText(text);
+  const lower = normalizePersonName(clean);
+  if (!/(^|\s)(кто|знаешь|напомни)(\s|$)/i.test(lower) || !/(^|\s)(чат|чате|тут|такой|такая|это|знаешь|напомни)(\s|$)/i.test(lower)) return null;
+
+  const mention = clean.match(/@([a-zA-Z0-9_]{3,32})/);
+  if (mention?.[1]) return mention[1];
+
+  const capitalized = [...clean.matchAll(/(?:^|[\s,?!:;])([А-ЯЁA-Z][а-яёa-z-]{2,30})(?=$|[\s,?!:;])/g)]
+    .map((match) => match[1])
+    .filter((word) => !/^(Темыч|Telegram)$/i.test(word));
+  if (capitalized.length > 0) return capitalized.at(-1) ?? null;
+
+  const stop = new Set(["кто", "такой", "такая", "это", "этом", "чате", "чат", "тут", "знаешь", "напомни"]);
+  const words = lower.match(/[а-яa-z0-9_]{3,32}/gi) ?? [];
+  return words.filter((word) => !stop.has(word)).at(-1) ?? null;
+}
+
 type AddReplyInput = {
   replyText: string;
   source: ReplySource;
@@ -442,6 +475,35 @@ export function getUserMemoryFallbackAnswer(input: { chatId: string; userId?: st
   if (name) return `тебя зовут ${name}`;
 
   return null;
+}
+
+export function getChatPersonFallbackAnswer(input: { chatId: string; userMessage: string }): string | null {
+  const name = getPersonNameFromQuestion(input.userMessage);
+  if (!name) return null;
+
+  const aliases = personAliases(name);
+  const rows = db.prepare(`
+    SELECT display_name, facts_json, last_messages_json FROM user_memories
+    WHERE chat_id = ? AND display_name IS NOT NULL
+    ORDER BY updated_at DESC
+    LIMIT 80
+  `).all(input.chatId) as Array<{ display_name: string | null; facts_json: string; last_messages_json: string }>;
+
+  const found = rows.find((row) => {
+    const haystack = normalizePersonName([
+      row.display_name ?? "",
+      ...parseJsonArray(row.facts_json),
+      ...parseJsonArray(row.last_messages_json).slice(0, 2),
+    ].join(" "));
+    return aliases.some((alias) => haystack.includes(alias));
+  });
+
+  if (!found?.display_name) return `не помню точно, кто это`;
+
+  const facts = parseJsonArray(found.facts_json).filter((fact) => !/^имя:/i.test(fact)).slice(0, 1);
+  return facts.length > 0
+    ? `по памяти это ${found.display_name}, ${facts[0]}`
+    : `по памяти это ${found.display_name}`;
 }
 
 export function addChatContext(input: { chatId: string; userId?: string; messageId?: string; text: string; role: "user" | "bot" }): void {
