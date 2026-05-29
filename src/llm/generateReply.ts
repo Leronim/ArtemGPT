@@ -1,5 +1,5 @@
 import { config } from "../config.js";
-import { addChatContext, getChatPersonFallbackAnswer, getRecentBotReplies, getRecentChatContext, getUserMemory, getUserMemoryFallbackAnswer } from "../style/replyBank.js";
+import { addChatContext, getChatPeopleContext, getRecentBotReplies, getRecentChatContext, getUserMemory, getUserMemoryFallbackAnswer } from "../style/replyBank.js";
 import { retrieveReplyCandidates } from "../style/replyBankRetriever.js";
 import { buildPrompt } from "../style/promptBuilder.js";
 import { getFallbackReply } from "../style/fallbackReplies.js";
@@ -130,18 +130,11 @@ export async function generateReply(input: {
   const selfQuestion = isBotSelfQuestion(input.userMessage);
   const profileFallback = selfQuestion ? getBotProfileFallbackAnswer(input.userMessage) : null;
   const userMemoryFallback = getUserMemoryFallbackAnswer(input);
-  const chatPersonFallback = getChatPersonFallbackAnswer({ chatId: input.chatId, userMessage: input.userMessage });
 
   if (userMemoryFallback) {
     addChatContext({ chatId: input.chatId, userId: input.userId, messageId: input.userMessageId, text: input.userMessage, role: "user" });
     addChatContext({ chatId: input.chatId, text: userMemoryFallback, role: "bot" });
     return { text: userMemoryFallback, usedDirectReply: true };
-  }
-
-  if (chatPersonFallback) {
-    addChatContext({ chatId: input.chatId, userId: input.userId, messageId: input.userMessageId, text: input.userMessage, role: "user" });
-    addChatContext({ chatId: input.chatId, text: chatPersonFallback, role: "bot" });
-    return { text: chatPersonFallback, usedDirectReply: true };
   }
 
   if (looksLikeGibberish(input.userMessage)) {
@@ -171,6 +164,7 @@ export async function generateReply(input: {
     botProfile: getBotProfile(),
     recentChatContext: getRecentChatContext(input.chatId, 4),
     userMemory: getUserMemory({ chatId: input.chatId, userId: input.userId }),
+    chatPeopleContext: getChatPeopleContext({ chatId: input.chatId, userMessage: input.userMessage }),
     learnedReply: selfQuestion ? undefined : chooseLearnedReplyHint({
       candidates: replyCandidates,
       userMessage: input.userMessage,

@@ -7,6 +7,7 @@ export function buildPrompt(input: {
   botProfile: string;
   recentChatContext: string;
   userMemory: string;
+  chatPeopleContext: string;
   learnedReply?: string;
 }): string {
   return `Ты Темыч, живой участник Telegram-чата.
@@ -23,6 +24,9 @@ ${truncateText(input.recentChatContext || "нет", 450)}
 
 Память о человеке:
 ${truncateText(input.userMemory || "нет", 180)}
+
+Участники чата:
+${truncateText(input.chatPeopleContext || "нет", 180)}
 
 Удачный похожий ответ из памяти:
 ${input.learnedReply ? truncateText(input.learnedReply, 120) : "нет"}

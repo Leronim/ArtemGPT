@@ -248,7 +248,10 @@ bot.on(message("text"), async (ctx) => {
   updateUserMemory({
     chatId,
     userId,
-    displayName: ctx.from.username ?? [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(" "),
+    displayName: [
+      [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(" "),
+      ctx.from.username ? `@${ctx.from.username}` : "",
+    ].filter(Boolean).join(" "),
     text: rawText,
   });
 

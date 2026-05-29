@@ -477,17 +477,17 @@ export function getUserMemoryFallbackAnswer(input: { chatId: string; userId?: st
   return null;
 }
 
-export function getChatPersonFallbackAnswer(input: { chatId: string; userMessage: string }): string | null {
+export function getChatPeopleContext(input: { chatId: string; userMessage: string }): string {
   const name = getPersonNameFromQuestion(input.userMessage);
-  if (!name) return null;
+  if (!name) return "";
 
   const aliases = personAliases(name);
   const rows = db.prepare(`
-    SELECT display_name, facts_json, last_messages_json FROM user_memories
+    SELECT user_id, display_name, facts_json, last_messages_json FROM user_memories
     WHERE chat_id = ? AND display_name IS NOT NULL
     ORDER BY updated_at DESC
     LIMIT 80
-  `).all(input.chatId) as Array<{ display_name: string | null; facts_json: string; last_messages_json: string }>;
+  `).all(input.chatId) as Array<{ user_id: string; display_name: string | null; facts_json: string; last_messages_json: string }>;
 
   const found = rows.find((row) => {
     const haystack = normalizePersonName([
@@ -498,12 +498,13 @@ export function getChatPersonFallbackAnswer(input: { chatId: string; userMessage
     return aliases.some((alias) => haystack.includes(alias));
   });
 
-  if (!found?.display_name) return `не помню точно, кто это`;
+  if (!found?.display_name) return `Запрошенный человек: ${name}. Точных данных в памяти нет.`;
 
   const facts = parseJsonArray(found.facts_json).filter((fact) => !/^имя:/i.test(fact)).slice(0, 1);
+  const details = facts.length > 0 ? `; ${facts[0]}` : "";
   return facts.length > 0
-    ? `по памяти это ${found.display_name}, ${facts[0]}`
-    : `по памяти это ${found.display_name}`;
+    ? `${name} = ${found.display_name} (${found.user_id})${details}`
+    : `${name} = ${found.display_name} (${found.user_id})`;
 }
 
 export function addChatContext(input: { chatId: string; userId?: string; messageId?: string; text: string; role: "user" | "bot" }): void {
