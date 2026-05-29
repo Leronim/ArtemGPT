@@ -99,16 +99,33 @@ function scoreChunk(chunk: MarkdownChunk, queryTokens: Set<string>): number {
   return score;
 }
 
+function isBroadMemoryQuestion(text: string): boolean {
+  const clean = cleanText(text).toLowerCase().replace(/ё/g, "е");
+  return /(что|че|чё|расскажи|покажи|напомни).{0,40}(добавил|добавили|запомнил|памят|memory|md|мд)/i.test(clean)
+    || /(что|че|чё).{0,20}(у тебя|там).{0,20}(в памяти|в memory|в md|в мд)/i.test(clean);
+}
+
+function formatChunks(chunks: MarkdownChunk[]): string {
+  return chunks.map((chunk) => `## ${chunk.title}\n${chunk.text}`).join("\n\n");
+}
+
 export function getRelevantMarkdownContext(input: { userMessage: string; limit?: number }): string {
+  const limit = input.limit ?? 4;
+  const allChunks = readMarkdownChunks();
+
+  if (isBroadMemoryQuestion(input.userMessage)) {
+    return formatChunks(allChunks.slice(0, limit));
+  }
+
   const queryTokens = tokenize(input.userMessage);
   if (queryTokens.size === 0) return "";
 
-  const chunks = readMarkdownChunks()
+  const chunks = allChunks
     .map((chunk) => ({ chunk, score: scoreChunk(chunk, queryTokens) }))
     .filter((item) => item.score > 0)
     .sort((left, right) => right.score - left.score)
-    .slice(0, input.limit ?? 4)
-    .map(({ chunk }) => `## ${chunk.title}\n${chunk.text}`);
+    .slice(0, limit)
+    .map(({ chunk }) => chunk);
 
-  return chunks.join("\n\n");
+  return formatChunks(chunks);
 }

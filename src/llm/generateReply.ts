@@ -49,6 +49,7 @@ function tooSimilar(left: string, right: string): boolean {
 function isLowQualityReply(text: string, input: { userMessage: string; recentBotReplies: string[] }): boolean {
   const clean = cleanGeneratedReply(text);
   if (!clean || clean.length > 260) return true;
+  if (/^(хз|ну хз|ну такое|надо подумать|не знаю)$/i.test(clean)) return true;
   if (looksLikeGibberish(clean)) return true;
   if (/\b(source|approved|trigger|score|category|reply bank|кандидаты ответов|сообщение пользователя)\b/i.test(clean)) return true;
   if (/^(as an ai|i'?m sorry|я не могу|как языковая модель)/i.test(clean)) return true;
