@@ -46,7 +46,7 @@ function tooSimilar(left: string, right: string): boolean {
 
 function isLowQualityReply(text: string, input: { userMessage: string; recentBotReplies: string[] }): boolean {
   const clean = cleanGeneratedReply(text);
-  if (!clean || clean.length > 260) return true;
+  if (!clean || clean.length > 700) return true;
   if (/^(хз|ну хз|ну такое|надо подумать|не знаю)$/i.test(clean)) return true;
   if (looksLikeGibberish(clean)) return true;
   if (/\b(source|approved|trigger|score|category|reply bank|кандидаты ответов|сообщение пользователя)\b/i.test(clean)) return true;
@@ -108,7 +108,7 @@ async function callOllama(prompt: string): Promise<string> {
         top_p: 0.92,
         repeat_penalty: 1.18,
         num_ctx: 1024,
-        num_predict: 45,
+        num_predict: 128,
       },
     }),
   }).finally(() => clearTimeout(timeout));
