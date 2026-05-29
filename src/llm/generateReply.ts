@@ -96,7 +96,7 @@ async function callOllama(prompt: string): Promise<string> {
         top_p: 0.92,
         repeat_penalty: 1.18,
         num_ctx: 1024,
-        num_predict: 40,
+        num_predict: 28,
       },
     }),
   }).finally(() => clearTimeout(timeout));
@@ -135,9 +135,9 @@ export async function generateReply(input: {
   const replyCandidates = await retrieveReplyCandidates({
     userMessage: input.userMessage,
     chatId: input.chatId,
-    limit: config.replyCandidateLimit,
+    limit: Math.min(config.replyCandidateLimit, 3),
   });
-  const recentBotReplies = getRecentBotReplies(input.chatId, 8);
+  const recentBotReplies = getRecentBotReplies(input.chatId, 5);
 
   if (!config.llmEnabled) {
     const candidate = replyCandidates.find((item) => !tooSimilar(item.replyText, input.userMessage))?.replyText;
@@ -150,9 +150,9 @@ export async function generateReply(input: {
   const prompt = buildPrompt({
     userMessage: input.userMessage,
     botProfile: getBotProfile(),
-    recentChatContext: getRecentChatContext(input.chatId, 12),
+    recentChatContext: getRecentChatContext(input.chatId, 6),
     userMemory: getUserMemory({ chatId: input.chatId, userId: input.userId }),
-    styleExamples: getStyleExamples(6),
+    styleExamples: getStyleExamples(3),
     replyCandidates: selfQuestion ? [] : replyCandidates,
   });
 

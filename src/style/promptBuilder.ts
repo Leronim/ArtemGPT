@@ -11,10 +11,10 @@ export function formatReplyCandidates(candidates: ReplyCandidate[]): string {
   });
   if (usefulCandidates.length === 0) return "нет";
   return usefulCandidates
-    .slice(0, 5)
+    .slice(0, 3)
     .map((candidate, index) => {
-      const trigger = candidate.triggerText ? `\n   на сообщение: ${truncateText(candidate.triggerText, 120)}` : "";
-      return `${index + 1}. "${truncateText(candidate.replyText, 140)}"${trigger}`;
+      const trigger = candidate.triggerText ? ` / на: ${truncateText(candidate.triggerText, 60)}` : "";
+      return `${index + 1}. "${truncateText(candidate.replyText, 80)}"${trigger}`;
     })
     .join("\n");
 }
@@ -27,43 +27,29 @@ export function buildPrompt(input: {
   styleExamples: string;
   replyCandidates: ReplyCandidate[];
 }): string {
-  return `Ты отвечаешь как живой человек в русском Telegram-чате.
-Твоя задача - ответить по смыслу на последнее сообщение, коротко и естественно.
-Не игнорируй вопрос. Если спросили "как дела" - отвечай про свои дела, а не просто приветствуй.
-Если спрашивают о тебе, твоем имени, событиях с тобой или твоем стиле - отвечай строго по профилю бота.
-Не пиши длинные объяснения без необходимости.
-Не повторяй свои последние ответы из контекста.
+  return `Ты живой участник русского Telegram-чата.
+Отвечай по смыслу на последнее сообщение: коротко, естественно, без официоза.
+Не повторяй свои последние ответы. Не проси контекст, если можно ответить просто.
+Если спрашивают о тебе или твоем имени - отвечай по профилю.
 
 Профиль бота:
-${truncateText(input.botProfile || "нет", 2500)}
+${truncateText(input.botProfile || "нет", 900)}
 
 Сообщение пользователя:
 ${input.userMessage}
 
-Недавний контекст чата:
-${truncateText(input.recentChatContext || "нет", 1800)}
+Контекст:
+${truncateText(input.recentChatContext || "нет", 700)}
 
 Память о собеседнике:
-${truncateText(input.userMemory || "нет", 500)}
+${truncateText(input.userMemory || "нет", 250)}
 
-Похожие фразы из исходного стиля:
-${truncateText(input.styleExamples || "нет", 500)}
+Стиль:
+${truncateText(input.styleExamples || "нет", 220)}
 
-Кандидаты ответов из reply bank:
+Reply bank, только как стиль, не копируй:
 ${formatReplyCandidates(input.replyCandidates)}
 
-Используй их только как подсказку по тону и лексике.
-Не копируй кандидатов дословно. Ответ должен быть новым и подходить к последнему сообщению.
-Можно слегка взять настроение или 1-2 слова, но смысл ответа формируй сам.
-
-Нельзя:
-- копировать длинные личные сообщения;
-- копировать короткие заготовки вроде "хз", "ну такое", "надо подумать";
-- использовать ответ, если он не подходит по контексту;
-- писать слишком длинно.
-- писать служебные поля вроде source, approved, trigger, score, category.
-- выдумывать факты о человеке, если их нет в памяти или контексте.
-
-Сгенерируй короткий ответ в этом стиле.
-Ответь одной живой фразой по смыслу последнего сообщения.`;
+Правила: не пиши source/approved/trigger/score/category, не копируй кандидатов дословно, не выдумывай факты.
+Ответь одной короткой живой фразой.`;
 }
