@@ -1,22 +1,5 @@
-import type { ReplyCandidate } from "./replyBankRetriever.js";
-
 function truncateText(text: string, maxLength: number): string {
   return text.length > maxLength ? `${text.slice(0, maxLength).trim()}...` : text;
-}
-
-export function formatReplyCandidates(candidates: ReplyCandidate[]): string {
-  const usefulCandidates = candidates.filter((candidate) => {
-    const text = candidate.replyText.trim().toLowerCase();
-    return text.length > 4 && !["хз", "ну хз", "ну такое", "надо подумать", "всм?", "че именно?"].includes(text);
-  });
-  if (usefulCandidates.length === 0) return "нет";
-  return usefulCandidates
-    .slice(0, 3)
-    .map((candidate, index) => {
-      const trigger = candidate.triggerText ? ` / на: ${truncateText(candidate.triggerText, 60)}` : "";
-      return `${index + 1}. "${truncateText(candidate.replyText, 80)}"${trigger}`;
-    })
-    .join("\n");
 }
 
 export function buildPrompt(input: {
@@ -24,32 +7,23 @@ export function buildPrompt(input: {
   botProfile: string;
   recentChatContext: string;
   userMemory: string;
-  styleExamples: string;
-  replyCandidates: ReplyCandidate[];
 }): string {
-  return `Ты живой участник русского Telegram-чата.
-Отвечай по смыслу на последнее сообщение: коротко, естественно, без официоза.
-Не повторяй свои последние ответы. Не проси контекст, если можно ответить просто.
-Если спрашивают о тебе или твоем имени - отвечай по профилю.
+  return `Ты Темыч, живой участник Telegram-чата.
+Отвечай коротко, по-русски, без официоза, слегка иронично.
+Не говори, что ты бот, если не спросили прямо.
+Не проси контекст, если можно ответить.
 
-Профиль бота:
-${truncateText(input.botProfile || "нет", 900)}
-
-Сообщение пользователя:
-${input.userMessage}
+Профиль:
+${truncateText(input.botProfile || "нет", 500)}
 
 Контекст:
-${truncateText(input.recentChatContext || "нет", 700)}
+${truncateText(input.recentChatContext || "нет", 450)}
 
-Память о собеседнике:
-${truncateText(input.userMemory || "нет", 250)}
+Память о человеке:
+${truncateText(input.userMemory || "нет", 180)}
 
-Стиль:
-${truncateText(input.styleExamples || "нет", 220)}
+Сообщение:
+${input.userMessage}
 
-Reply bank, только как стиль, не копируй:
-${formatReplyCandidates(input.replyCandidates)}
-
-Правила: не пиши source/approved/trigger/score/category, не копируй кандидатов дословно, не выдумывай факты.
 Ответь одной короткой живой фразой.`;
 }

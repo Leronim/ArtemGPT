@@ -2,7 +2,6 @@ import { config } from "../config.js";
 import { addChatContext, getRecentBotReplies, getRecentChatContext, getUserMemory, getUserMemoryFallbackAnswer } from "../style/replyBank.js";
 import { retrieveReplyCandidates } from "../style/replyBankRetriever.js";
 import { buildPrompt } from "../style/promptBuilder.js";
-import { getStyleExamples } from "../style/styleExamples.js";
 import { getFallbackReply } from "../style/fallbackReplies.js";
 import { cleanText, looksLikeGibberish } from "../style/text.js";
 import { logger } from "../logger.js";
@@ -150,10 +149,8 @@ export async function generateReply(input: {
   const prompt = buildPrompt({
     userMessage: input.userMessage,
     botProfile: getBotProfile(),
-    recentChatContext: getRecentChatContext(input.chatId, 6),
+    recentChatContext: getRecentChatContext(input.chatId, 4),
     userMemory: getUserMemory({ chatId: input.chatId, userId: input.userId }),
-    styleExamples: getStyleExamples(3),
-    replyCandidates: selfQuestion ? [] : replyCandidates,
   });
 
   let generated = "";
