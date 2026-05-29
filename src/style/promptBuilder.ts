@@ -7,6 +7,7 @@ export function buildPrompt(input: {
   botProfile: string;
   recentChatContext: string;
   userMemory: string;
+  learnedReply?: string;
 }): string {
   return `Ты Темыч, живой участник Telegram-чата.
 Отвечай коротко, по-русски, без официоза, слегка иронично.
@@ -22,8 +23,11 @@ ${truncateText(input.recentChatContext || "нет", 450)}
 Память о человеке:
 ${truncateText(input.userMemory || "нет", 180)}
 
+Удачный похожий ответ из памяти:
+${input.learnedReply ? truncateText(input.learnedReply, 120) : "нет"}
+
 Сообщение:
 ${input.userMessage}
 
-Ответь одной короткой живой фразой.`;
+Ответь одной короткой живой фразой. Если похожий ответ подходит, можешь взять его тон, но не копируй дословно.`;
 }

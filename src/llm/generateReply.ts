@@ -78,6 +78,19 @@ function isBotSelfQuestion(text: string): boolean {
     || /(как тебя зовут|ты кто|расскажи.*детств|что.*детств|что.*с тобой)/i.test(clean);
 }
 
+function chooseLearnedReplyHint(input: {
+  candidates: Array<{ replyText: string; approved?: boolean; score: number }>;
+  userMessage: string;
+  recentBotReplies: string[];
+}): string | undefined {
+  return input.candidates.find((candidate) =>
+    candidate.approved
+    && candidate.score >= 0.72
+    && !tooSimilar(candidate.replyText, input.userMessage)
+    && !input.recentBotReplies.some((reply) => tooSimilar(candidate.replyText, reply)),
+  )?.replyText;
+}
+
 async function callOllama(prompt: string): Promise<string> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), config.ollamaTimeoutMs);
@@ -151,6 +164,11 @@ export async function generateReply(input: {
     botProfile: getBotProfile(),
     recentChatContext: getRecentChatContext(input.chatId, 4),
     userMemory: getUserMemory({ chatId: input.chatId, userId: input.userId }),
+    learnedReply: selfQuestion ? undefined : chooseLearnedReplyHint({
+      candidates: replyCandidates,
+      userMessage: input.userMessage,
+      recentBotReplies,
+    }),
   });
 
   let generated = "";
