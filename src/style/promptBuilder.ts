@@ -22,7 +22,6 @@ export function formatReplyCandidates(candidates: ReplyCandidate[]): string {
 export function buildPrompt(input: {
   userMessage: string;
   botProfile: string;
-  markdownContext: string;
   recentChatContext: string;
   userMemory: string;
   styleExamples: string;
@@ -37,9 +36,6 @@ export function buildPrompt(input: {
 
 Профиль бота:
 ${truncateText(input.botProfile || "нет", 2500)}
-
-Релевантная память из markdown:
-${truncateText(input.markdownContext || "нет", 1600)}
 
 Сообщение пользователя:
 ${input.userMessage}
@@ -67,7 +63,6 @@ ${formatReplyCandidates(input.replyCandidates)}
 - писать слишком длинно.
 - писать служебные поля вроде source, approved, trigger, score, category.
 - выдумывать факты о человеке, если их нет в памяти или контексте.
-- если вопрос связан с фактами, событиями или историями бота, сначала опирайся на markdown-память и профиль.
 
 Сгенерируй короткий ответ в этом стиле.
 Ответь одной живой фразой по смыслу последнего сообщения.`;
