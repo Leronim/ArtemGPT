@@ -3,7 +3,7 @@ import { addChatContext, getRecentBotReplies, getRecentChatContext, getUserMemor
 import { retrieveReplyCandidates } from "../style/replyBankRetriever.js";
 import { buildPrompt } from "../style/promptBuilder.js";
 import { getStyleExamples } from "../style/styleExamples.js";
-import { getFallbackReply, getFastCommonReply } from "../style/fallbackReplies.js";
+import { getFallbackReply } from "../style/fallbackReplies.js";
 import { cleanText, looksLikeGibberish } from "../style/text.js";
 import { logger } from "../logger.js";
 import { getBotProfile, getBotProfileFallbackAnswer } from "../style/botProfile.js";
@@ -62,7 +62,6 @@ function chooseSafeReply(input: {
   generated: string;
   userMessage: string;
   recentBotReplies: string[];
-  candidates: Array<{ replyText: string }>;
   profileFallback?: string | null;
 }): string {
   const generated = cleanGeneratedReply(input.generated);
@@ -70,11 +69,7 @@ function chooseSafeReply(input: {
     return generated;
   }
   if (input.profileFallback) return input.profileFallback;
-  const candidate = input.candidates.find((item) =>
-    !tooSimilar(item.replyText, input.userMessage)
-    && !input.recentBotReplies.some((reply) => tooSimilar(item.replyText, reply)),
-  )?.replyText;
-  return candidate ?? getFastCommonReply(input.userMessage) ?? getFallbackReply(input.userMessage);
+  return getFallbackReply(input.userMessage);
 }
 
 function isBotSelfQuestion(text: string): boolean {
@@ -141,25 +136,6 @@ export async function generateReply(input: {
   });
   const recentBotReplies = getRecentBotReplies(input.chatId, 8);
 
-  const direct = replyCandidates.find((candidate) =>
-    candidate.approved
-    && candidate.score >= config.directReplyMinScore
-    && !tooSimilar(candidate.replyText, input.userMessage)
-    && !recentBotReplies.some((reply) => tooSimilar(candidate.replyText, reply)),
-  );
-  if (!selfQuestion && config.directReplyEnabled && direct) {
-    addChatContext({ chatId: input.chatId, userId: input.userId, messageId: input.userMessageId, text: input.userMessage, role: "user" });
-    addChatContext({ chatId: input.chatId, text: direct.replyText, role: "bot" });
-    return { text: direct.replyText, usedDirectReply: true };
-  }
-
-  const fastCommonReply = config.fastCommonRepliesEnabled ? getFastCommonReply(input.userMessage) : null;
-  if (!selfQuestion && fastCommonReply) {
-    addChatContext({ chatId: input.chatId, userId: input.userId, messageId: input.userMessageId, text: input.userMessage, role: "user" });
-    addChatContext({ chatId: input.chatId, text: fastCommonReply, role: "bot" });
-    return { text: fastCommonReply, usedDirectReply: true };
-  }
-
   if (!config.llmEnabled) {
     const candidate = replyCandidates.find((item) => !tooSimilar(item.replyText, input.userMessage))?.replyText;
     const text = profileFallback ?? candidate ?? getFallbackReply(input.userMessage);
@@ -186,14 +162,12 @@ export async function generateReply(input: {
     } else {
       logger.error(error);
     }
-    const candidate = replyCandidates.find((item) => !tooSimilar(item.replyText, input.userMessage))?.replyText;
-    generated = selfQuestion ? "" : candidate ?? getFastCommonReply(input.userMessage) ?? getFallbackReply(input.userMessage);
+    generated = "";
   }
   const text = chooseSafeReply({
     generated,
     userMessage: input.userMessage,
     recentBotReplies,
-    candidates: selfQuestion ? [] : replyCandidates,
     profileFallback,
   }) || "не понял, давай подробнее";
   addChatContext({ chatId: input.chatId, userId: input.userId, messageId: input.userMessageId, text: input.userMessage, role: "user" });
